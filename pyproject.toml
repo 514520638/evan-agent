@@ -1,0 +1,21 @@
+[project]
+name = "evan-agent"
+version = "0.1.0"
+description = "A Python AI agent powered by LangChain"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=1.0,<2.0",
+    "langchain-anthropic>=1.0,<2.0",
+    "python-dotenv>=1.0,<2.0",
+]
+
+[project.scripts]
+evan-agent = "evan_agent.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evan_agent"]

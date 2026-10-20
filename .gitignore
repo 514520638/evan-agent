@@ -151,6 +151,8 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -158,6 +160,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Local tooling cache
+.uv-cache/
+.DS_Store
 
 # Spyder project settings
 .spyderproject
