@@ -7,7 +7,15 @@ from dotenv import load_dotenv
 from anthropic import APIError
 from langchain.agents import create_agent
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import BaseMessage, HumanMessage
+
+from evan_agent.middleware import build_middleware
+from evan_agent.auth import AuthContext, AuthenticationError, AuthStore, read_password
+from evan_agent.sessions import SessionStore
+from evan_agent.knowledge import KnowledgeStore
+from evan_agent.profile_commands import ProfileCommands
+from evan_agent.knowledge_tools import build_knowledge_tools
+from evan_agent.memory_review import MemoryReviewer, ReviewCancelled
+from evan_agent.terminal import read_line, StreamingPrinter
 
 
 def describe_api_error(error: APIError, api_key: str) -> str:
@@ -43,13 +51,19 @@ def main() -> None:
     # load_dotenv 默认不覆盖终端中已导出的同名环境变量。
     # .env 中的 NO_PROXY 也在此加载，让指定 MiniMax 域名绕过本机代理。
     load_dotenv(Path.cwd() / ".env")
+    auth_store = AuthStore()
+    knowledge = KnowledgeStore()
+    profiles = ProfileCommands(knowledge)
+    identity = AuthContext.guest()
+    sessions = SessionStore()
+    conversation_id = sessions.create(identity)
     api_key = os.getenv("MINIMAX_API_KEY", "").strip()
     # api_key鉴空。
     if not api_key or api_key == "your-minimax-key-here":
         raise SystemExit("请在项目根目录的 .env 中填写 MINIMAX_API_KEY（MiniMax API / 订阅 Key）。")
 
     # 使用 MiniMax 原始模型 ID；没有配置时使用默认模型。
-    model_name = (os.getenv("MODEL") or "MiniMax-M3.1-Flash").strip()
+    model_name = (os.getenv("MODEL")).strip()
     # ChatAnthropic 处理 Anthropic 协议；实际请求发送到下面的 MiniMax 地址。
     # 显式传入密钥和地址，避免误用其他供应商的默认认证配置。
     model = ChatAnthropic(
@@ -65,35 +79,120 @@ def main() -> None:
     # system_prompt 用于设定助手的角色和回复风格。
     agent = create_agent(
         model=model,
-        tools=[],
-        system_prompt="你是 Evan，一位友好的 AI 助手。请清楚、简洁地回答用户问题。",
+        tools=build_knowledge_tools(knowledge),
+        checkpointer=sessions.checkpointer,
+        # 统一接入审计、生命周期日志、调用限额与当前聊天的摘要压缩。
+        middleware=build_middleware(model, lifecycle_logs=False),
+        # 身份只由认证入口生成，通过运行时上下文传递，不放入模型可修改的状态。
+        context_schema=AuthContext,
+        # 具体角色由 PersonaMiddleware 按可信登录身份逐轮注入。
     )
     
-    # 保留完整消息对象，以便回传文本、思考内容和未来的工具调用信息。
-    messages: list[BaseMessage] = []
+    # 完整消息历史由 SessionStore 按聊天 ID 保存，不再共用一个列表。
     print(f"Evan Agent 已启动（MiniMax / {model_name}）。输入 exit 或 quit 结束对话。")
+    print("当前身份：访客。命令：/login 登录、/logout 退出登录、/whoami 查看身份、/help 帮助。")
+    print(f"当前聊天：{conversation_id}。/new 新建、/sessions 列表、/switch ID 切换、/clear 清空。")
+    print("个人资料管理：/profile help（本地保存，不调用模型）。")
+    if not auth_store.is_initialized():
+        print("尚未设置主人密码，可另开终端运行 uv run evan-auth init。")
 
     try:
         while True:
             # 去掉首尾空白；支持退出命令，忽略没有内容的输入。
-            prompt = input("你：").strip()
+            prompt = read_line("你：").strip()
+            # 等待输入期间会话也可能过期；在处理任何命令或模型请求前降级并清空历史。
+            if identity.role == "owner" and not identity.is_owner:
+                sessions.discard_identity(identity)
+                identity = AuthContext.guest()
+                conversation_id = sessions.create(identity)
+                print("本人登录已过期，已切换为访客并清空当前上下文。")
             if prompt.lower() in {"exit", "quit"}:
                 break
             if not prompt:
                 continue
+            # 管理命令、录入内容及确认输入不进入消息历史或模型上下文。
+            if profiles.handle(prompt, identity):
+                continue
+            # 认证命令在本地消费，命令、密码和认证结果均不进入模型消息历史。
+            if prompt == "/login":
+                sessions.discard_identity(identity)
+                identity = AuthContext.guest()
+                try:
+                    identity = auth_store.login(read_password("主人密码："))
+                except (AuthenticationError, EOFError, KeyboardInterrupt) as error:
+                    print(str(error) or "已取消登录。")
+                else:
+                    print("本人登录成功，有效期 30 分钟。已开启新的对话会话。")
+                conversation_id = sessions.create(identity)
+                continue
+            if prompt == "/logout":
+                sessions.discard_identity(identity)
+                identity = AuthContext.guest()
+                conversation_id = sessions.create(identity)
+                print("已退出登录，切换为访客并清空当前上下文。")
+                continue
+            if prompt == "/whoami":
+                print(f"当前身份：{'本人' if identity.is_owner else '访客'}；登录会话：{identity.session_id}；聊天：{conversation_id}")
+                continue
+            if prompt == "/new":
+                conversation_id = sessions.create(identity)
+                print(f"已新建空白聊天：{conversation_id}")
+                continue
+            if prompt == "/sessions":
+                for item in sessions.list_for(identity):
+                    marker = "*" if item.conversation_id == conversation_id else " "
+                    print(f"{marker} {item.conversation_id} | {item.message_count} 条消息")
+                continue
+            if prompt == "/clear":
+                sessions.clear(identity, conversation_id)
+                print("当前聊天已清空。")
+                continue
+            if prompt == "/switch" or prompt.startswith("/switch "):
+                parts = prompt.split()
+                if len(parts) != 2:
+                    print("用法：/switch 聊天ID（通过 /sessions 查看完整 ID）")
+                    continue
+                try:
+                    sessions.history(identity, parts[1])
+                except PermissionError as error:
+                    print(error)
+                else:
+                    conversation_id = parts[1]
+                    print(f"已切换到聊天：{conversation_id}")
+                continue
+            if prompt == "/help":
+                print("/login：本人登录\n/logout：退出并删除本次身份的全部聊天\n/whoami：查看身份\n/new：新建聊天\n/sessions：列出当前身份的聊天\n/switch ID：切换聊天\n/clear：清空当前聊天\n/profile help：个人资料管理\nexit 或 quit：退出程序")
+                continue
+            if prompt.startswith("/"):
+                print("未知命令。请使用 /help；/login 后不要附加密码。")
+                continue
+            output = StreamingPrinter()
             try:
-                # 把历史消息与本轮输入一起交给 Agent。
-                # 此处构造新列表，请求失败时不把本轮输入写入已确认的历史。
-                result = agent.invoke(
-                    {"messages": [*messages, HumanMessage(content=prompt)]}
-                )
+                # 流式显示主模型文本；完整消息仍在整轮成功后写入当前会话。
+                answer = sessions.invoke(agent, identity, conversation_id, prompt, reviewer=MemoryReviewer(knowledge), on_text=output.write, on_message=output.new_message)
+            except ReviewCancelled as error:
+                output.finish()
+                print(error)
+                continue
+            except PermissionError as error:
+                output.finish()
+                sessions.discard_identity(identity)
+                identity = AuthContext.guest()
+                conversation_id = sessions.create(identity)
+                print(f"{error} 已切换到新的访客聊天。")
+                continue
             except APIError as error:
+                output.finish()
+                if output.has_text:
+                    print("回答传输中断，以上为未完成内容，本轮聊天历史未保存。")
                 # API 请求失败后显示原因，允许用户继续输入或退出。
                 print(describe_api_error(error, api_key))
                 continue
-            # 请求成功后保存完整历史；终端仅显示最终消息的文本部分。
-            messages = result["messages"]
-            print(f"Agent：{messages[-1].text}\n")
+            finally:
+                output.finish()
+            # 限额中间件的合成回复没有模型 token 流，仍需显示。
+            if answer and answer != output.last_text:
+                print(f"Agent：{answer}\n")
     except (EOFError, KeyboardInterrupt):
         # Ctrl+D（输入结束）或 Ctrl+C 均视为正常结束聊天。
         pass

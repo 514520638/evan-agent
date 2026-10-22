@@ -8,10 +8,13 @@ dependencies = [
     "langchain>=1.0,<2.0",
     "langchain-anthropic>=1.0,<2.0",
     "python-dotenv>=1.0,<2.0",
+    "prompt-toolkit>=3.0.52,<4.0",
 ]
 
 [project.scripts]
 evan-agent = "evan_agent.main:main"
+evan-auth = "evan_agent.auth:main"
+evan-knowledge = "evan_agent.knowledge:main"
 
 [build-system]
 requires = ["hatchling"]
