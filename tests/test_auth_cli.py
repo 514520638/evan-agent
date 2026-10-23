@@ -51,9 +51,9 @@ class CliAuthTests(unittest.TestCase):
                 patch("evan_agent.main.AuthStore", return_value=store),
                 patch("evan_agent.main.KnowledgeStore", return_value=KnowledgeStore(Path(directory) / "knowledge.sqlite3")),
                 patch("evan_agent.main.read_password", return_value="test-only-password-2026"),
-                patch("evan_agent.main.ChatAnthropic", return_value=model),
-                patch("evan_agent.main.create_agent", side_effect=build_agent),
-                patch("evan_agent.main.build_middleware", side_effect=lambda model, **kwargs: build_middleware(model, writer=AuditWriter(Path(directory) / "audit"), **kwargs)),
+                patch("evan_agent.service.ChatAnthropic", return_value=model),
+                patch("evan_agent.service.create_agent", side_effect=build_agent),
+                patch("evan_agent.service.build_middleware", side_effect=lambda model, **kwargs: build_middleware(model, writer=AuditWriter(Path(directory) / "audit"), **kwargs)),
                 patch("builtins.input", side_effect=inputs),
                 contextlib.redirect_stdout(io.StringIO()) as output,
             ):

@@ -5,7 +5,8 @@
 """
 
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from threading import Event
 from getpass import GetPassWarning, getpass
 import argparse
 import hashlib
@@ -41,6 +42,7 @@ class AuthContext:
     role: str = "guest"
     expires_at: float = 0.0
     conversation_id: str | None = None
+    revoked: Event = field(default_factory=Event, compare=False, repr=False)
 
     @classmethod
     def guest(cls) -> "AuthContext":
@@ -48,7 +50,7 @@ class AuthContext:
 
     @property
     def is_owner(self) -> bool:
-        return self.role == "owner" and self.user_id == "owner" and time.monotonic() < self.expires_at
+        return not self.revoked.is_set() and self.role == "owner" and self.user_id == "owner" and time.monotonic() < self.expires_at
 
 
 def require_owner(context: AuthContext | None) -> str:

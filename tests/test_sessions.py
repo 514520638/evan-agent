@@ -85,9 +85,13 @@ class SessionTests(unittest.TestCase):
     def test_expiry_during_request_does_not_return_private_result(self):
         owner = AuthContext("login", "owner", "owner", time.monotonic() + 60)
         chat = self.store.create(owner)
-        with patch('evan_agent.auth.time.monotonic', side_effect=[owner.expires_at-1, owner.expires_at-1, owner.expires_at+1]):
+        with patch('evan_agent.auth.time.monotonic', return_value=owner.expires_at-1) as clock:
+            def expire(value, **kwargs):
+                clock.return_value = owner.expires_at + 1
+                return {'messages': [AIMessage(content='私人回复')]}
+            agent = Mock(invoke=expire)
             with self.assertRaises(PermissionError):
-                self.store.invoke(self.agent, owner, chat, "问题")
+                self.store.invoke(agent, owner, chat, "问题")
         self.assertEqual(self.store.history(owner, chat), [])
 
     def test_logout_during_request_invalidates_pending_result(self):

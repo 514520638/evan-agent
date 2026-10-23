@@ -27,6 +27,8 @@ class _Conversation:
     owner: AuthContext
     messages: list[BaseMessage] = field(default_factory=list)
     lock: Any = field(default_factory=RLock)
+    pending: dict | None = None
+    busy: bool = False
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,10 @@ class ConversationInfo:
 
     conversation_id: str
     message_count: int
+
+
+class SessionBusyError(RuntimeError):
+    """同一聊天正在执行或存在待审批事项。"""
 
 
 class SessionStore:
@@ -51,6 +57,8 @@ class SessionStore:
 
     @staticmethod
     def _check_identity(identity: AuthContext) -> None:
+        if identity.revoked.is_set():
+            raise PermissionError("当前登录会话已退出。")
         if identity.role == "owner":
             if not identity.is_owner:
                 raise PermissionError("本人登录已过期，请重新登录。")
@@ -103,39 +111,75 @@ class SessionStore:
         item = self._get(identity, conversation_id)
         with item.lock, self._lock:
             self._get(identity, conversation_id)
+            if item.busy:
+                raise SessionBusyError("该聊天正在执行，请稍后操作。")
+            if item.pending:
+                self.checkpointer.delete_thread(item.pending["thread_id"])
+                item.pending = None
             item.messages.clear()
 
     def discard_identity(self, identity: AuthContext) -> None:
         """删除该登录身份的全部聊天；身份过期时也允许执行清理。"""
         with self._lock:
+            for item in self._items.values():
+                if self._same_identity(item.owner, identity) and item.pending:
+                    self.checkpointer.delete_thread(item.pending["thread_id"])
             self._items = {
                 key: item for key, item in self._items.items()
                 if not self._same_identity(item.owner, identity)
             }
 
-    def invoke(self, agent: Any, identity: AuthContext, conversation_id: str, prompt: str, reviewer=None, on_text=None, on_message=None) -> str:
-        """读取本会话历史、调用 Agent，并在成功后提交完整消息。
+    def pending_for(self, identity, conversation_id):
+        """仅向所属登录会话返回待审批内容，支持页面刷新后恢复审批界面。"""
+        with self._lock:
+            item = self._get(identity, conversation_id)
+            return deepcopy(item.pending["review"]) if item.pending else None
 
-        模型异常时保持原历史不变。请求期间身份过期或会话被清除时，
-        结果不写入仓库。流式模式会在每个片段显示前检查身份；已显示文字无法撤回。
+    def cancel_pending(self, identity, conversation_id, approval_id):
+        with self._lock:
+            item = self._get(identity, conversation_id)
+            if item.busy:
+                raise SessionBusyError("该聊天正在执行。")
+            if not item.pending or item.pending["review"]["approval_id"] != approval_id:
+                raise SessionBusyError("审批已失效或已处理。")
+            self.checkpointer.delete_thread(item.pending["thread_id"])
+            item.pending = None
+
+    def events(self, agent, identity, conversation_id, prompt=None, *, approval_id=None,
+               decision=None, streaming=True):
+        """共享的执行状态机；CLI 和 HTTP 都消费相同事件。
+
+        到达审批点后返回 approval_required 并结束当前请求，保留 checkpoint。
+        后续请求凭所属身份和审批 ID 恢复；重复审批、跨会话审批均拒绝。
+        不跨 yield 持有线程锁，适配 HTTP 在线程池中迭代同步生成器。
         """
-        item = self._get(identity, conversation_id)
-        with item.lock:
-            self._get(identity, conversation_id)
-            # 深拷贝隔离模型处理期间可能发生的消息修改。
-            messages = [*deepcopy(item.messages), HumanMessage(content=prompt)]
-            # 每轮分配独立临时 thread，暂停与恢复共用该 ID。聊天历史仍由本仓库管理，
-            # 避免 checkpoint 的历史与手动传入的消息叠加，计数也不会跨轮累计。
-            thread_id = uuid4().hex
-            config = {"configurable": {"thread_id": thread_id}}
-            context = replace(identity, conversation_id=conversation_id)
-            def run(value):
-                if on_text is None:
-                    return agent.invoke(value, config=config, context=context)
-                result = {}
-                active_message = object()
-                # messages 用于即时显示，values 用于完整状态与 HITL 中断恢复。
-                # 只显示 model 节点的文本，排除摘要模型、工具参数和 thinking 块。
+        with self._lock:
+            item = self._get(identity, conversation_id)
+            if item.busy:
+                raise SessionBusyError("该聊天正在执行，请勿重复发送。")
+            if approval_id is not None:
+                from evan_agent.auth import require_owner
+                require_owner(identity)
+                if not item.pending or item.pending["review"]["approval_id"] != approval_id:
+                    raise SessionBusyError("审批已失效或已处理。")
+                thread_id = item.pending["thread_id"]
+                value = Command(resume=decision)
+            else:
+                if item.pending:
+                    raise SessionBusyError("请先确认或取消当前待审批事项。")
+                if not isinstance(prompt, str) or not prompt.strip():
+                    raise ValueError("消息不能为空。")
+                thread_id = uuid4().hex
+                value = {"messages": [*deepcopy(item.messages), HumanMessage(content=prompt)]}
+            item.pending = None
+            item.busy = True
+        config = {"configurable": {"thread_id": thread_id}}
+        context = replace(identity, conversation_id=conversation_id)
+        paused = False
+        try:
+            result = {}
+            active_message = object()
+            if streaming:
                 with closing(agent.stream(value, config=config, context=context,
                                           stream_mode=["messages", "values"])) as events:
                     for mode, payload in events:
@@ -144,34 +188,70 @@ class SessionStore:
                             result.update(payload)
                         elif mode == "messages":
                             chunk, metadata = payload
-                            if metadata.get("langgraph_node") == "model" and isinstance(chunk, AIMessageChunk):
-                                text = chunk.text
-                                if text:
-                                    message_key = chunk.id or metadata.get("langgraph_step")
-                                    if message_key != active_message:
-                                        if on_message is not None:
-                                            on_message()
-                                        active_message = message_key
-                                    on_text(text)
-                return result
-
-            try:
-                result = run({"messages": messages})
-                while result.get("__interrupt__"):
-                    self._get(identity, conversation_id)
-                    if reviewer is None:
-                        raise ReviewCancelled("写入需要人工确认；当前入口没有审批界面，未执行待审批写入。")
-                    interrupts = result["__interrupt__"]
-                    # 使用 batched HITL：一次中断中包含全部待审操作，按原顺序决策。
+                            if metadata.get("langgraph_node") == "model" and isinstance(chunk, AIMessageChunk) and chunk.text:
+                                key = chunk.id or metadata.get("langgraph_step")
+                                if key != active_message:
+                                    active_message = key
+                                    yield {"type": "message_start"}
+                                yield {"type": "delta", "text": chunk.text}
+            else:
+                result = agent.invoke(value, config=config, context=context)
+            with self._lock:
+                self._get(identity, conversation_id)
+                interrupts = result.get("__interrupt__")
+                if interrupts:
                     if len(interrupts) != 1:
-                        raise ReviewCancelled("收到多个审批中断，已停止本轮以避免错误恢复。")
-                    decision = reviewer(deepcopy(interrupts[0].value), identity)
-                    self._get(identity, conversation_id)
-                    result = run(Command(resume=decision))
-                with self._lock:
-                    self._get(identity, conversation_id)
+                        raise ReviewCancelled("审批中断结构异常，已停止本轮。")
+                    # 暂停轮次尚未提交到聊天历史，单独提供本轮用户文本供页面刷新展示。
+                    user_message = next((message.text for message in reversed(result.get("messages", []))
+                                         if isinstance(message, HumanMessage)), "")
+                    review = {"approval_id": uuid4().hex, "user_message": user_message,
+                              **deepcopy(interrupts[0].value)}
+                    item.pending = {"thread_id": thread_id, "review": review}
+                    paused = True
+                    event = {"type": "approval_required", **review}
+                else:
                     item.messages = deepcopy(result["messages"])
-                    return item.messages[-1].text
-            finally:
-                # 成功、取消、异常都删除本轮 checkpoint，避免留下可误恢复的审批状态。
-                self.checkpointer.delete_thread(thread_id)
+                    event = {"type": "done", "answer": item.messages[-1].text}
+            yield event
+        finally:
+            with self._lock:
+                item.busy = False
+                if not paused or self._items.get(conversation_id) is not item:
+                    self.checkpointer.delete_thread(thread_id)
+                    item.pending = None
+
+    def invoke(self, agent: Any, identity: AuthContext, conversation_id: str, prompt: str,
+               reviewer=None, on_text=None, on_message=None) -> str:
+        """CLI 适配器：将共享事件转换为终端输出，并同步询问人工审批。"""
+        next_args = {"prompt": prompt}
+        while True:
+            review = None
+            with closing(self.events(agent, identity, conversation_id, streaming=on_text is not None,
+                                     **next_args)) as events:
+                for event in events:
+                    if event["type"] == "message_start" and on_message:
+                        on_message()
+                    elif event["type"] == "delta" and on_text:
+                        on_text(event["text"])
+                    elif event["type"] == "approval_required":
+                        review = event
+                    elif event["type"] == "done":
+                        return event["answer"]
+            if review is None:
+                raise RuntimeError("Agent 未返回最终结果。")
+            try:
+                self._get(identity, conversation_id)
+                if reviewer is None:
+                    raise ReviewCancelled("当前入口没有审批界面，未执行待审批写入。")
+                decision = reviewer(deepcopy(review), identity)
+                self._get(identity, conversation_id)
+                next_args = {"approval_id": review["approval_id"], "decision": decision}
+            except BaseException:
+                # CLI 取消或身份过期时也要删除尚未执行的 checkpoint。
+                with self._lock:
+                    item = self._items.get(conversation_id)
+                    if item and item.pending:
+                        self.checkpointer.delete_thread(item.pending["thread_id"])
+                        item.pending = None
+                raise

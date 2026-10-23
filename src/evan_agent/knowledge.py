@@ -96,6 +96,8 @@ class KnowledgeStore:
         """在执行查询前确定权限，避免读取私人资料后再交给模型过滤。"""
         if not isinstance(identity, AuthContext):
             raise PermissionError("缺少可信身份。")
+        if identity.revoked.is_set():
+            raise PermissionError("当前登录会话已退出。")
         if identity.role == "owner":
             return "owner_id = ?", [require_owner(identity)]
         if identity.role != "guest" or identity.user_id is not None:

@@ -5,15 +5,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from anthropic import APIError
-from langchain.agents import create_agent
-from langchain_anthropic import ChatAnthropic
 
-from evan_agent.middleware import build_middleware
 from evan_agent.auth import AuthContext, AuthenticationError, AuthStore, read_password
 from evan_agent.sessions import SessionStore
 from evan_agent.knowledge import KnowledgeStore
 from evan_agent.profile_commands import ProfileCommands
-from evan_agent.knowledge_tools import build_knowledge_tools
+from evan_agent.service import AgentService
 from evan_agent.memory_review import MemoryReviewer, ReviewCancelled
 from evan_agent.terminal import read_line, StreamingPrinter
 
@@ -62,32 +59,10 @@ def main() -> None:
     if not api_key or api_key == "your-minimax-key-here":
         raise SystemExit("请在项目根目录的 .env 中填写 MINIMAX_API_KEY（MiniMax API / 订阅 Key）。")
 
-    # 使用 MiniMax 原始模型 ID；没有配置时使用默认模型。
-    model_name = (os.getenv("MODEL")).strip()
-    # ChatAnthropic 处理 Anthropic 协议；实际请求发送到下面的 MiniMax 地址。
-    # 显式传入密钥和地址，避免误用其他供应商的默认认证配置。
-    model = ChatAnthropic(
-        model=model_name,
-        api_key=api_key,
-        base_url=os.getenv("MINIMAX_BASE_URL").strip(),
-        max_tokens=8192,  # 单次生成上限，包含模型的思考 token。
-        timeout=60,  # SDK HTTP 请求超时设置，单位为秒。
-        max_retries=1,  # 对 SDK 判定可重试的请求，最多自动重试一次。
-    )
+    service = AgentService(auth=auth_store, knowledge=knowledge, sessions=sessions)
+    agent = service.agent
+    model_name = (os.getenv("MODEL") or "MiniMax-M3.1-Flash").strip()
 
-    # 创建 LangChain Agent；后续可以在 tools 中注册业务工具。
-    # system_prompt 用于设定助手的角色和回复风格。
-    agent = create_agent(
-        model=model,
-        tools=build_knowledge_tools(knowledge),
-        checkpointer=sessions.checkpointer,
-        # 统一接入审计、生命周期日志、调用限额与当前聊天的摘要压缩。
-        middleware=build_middleware(model, lifecycle_logs=False),
-        # 身份只由认证入口生成，通过运行时上下文传递，不放入模型可修改的状态。
-        context_schema=AuthContext,
-        # 具体角色由 PersonaMiddleware 按可信登录身份逐轮注入。
-    )
-    
     # 完整消息历史由 SessionStore 按聊天 ID 保存，不再共用一个列表。
     print(f"Evan Agent 已启动（MiniMax / {model_name}）。输入 exit 或 quit 结束对话。")
     print("当前身份：访客。命令：/login 登录、/logout 退出登录、/whoami 查看身份、/help 帮助。")
