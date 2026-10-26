@@ -1,5 +1,8 @@
 # 贾维斯式 AI Agent · 功能与模块拆分（LangChain 1.4 + LangGraph 路线）
 
+> 文档定位：历史研究与规划，包含仓库外实验，不能作为当前已实现能力或开发门禁的依据。
+> 当前代码地图见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，开发工作流见 [AGENTS.md](AGENTS.md)。
+
 > Python + LangChain · 纯文本（无语音输入输出）
 > 目标：常驻、能主动、可观测、风险可控的桌面级 Agent
 

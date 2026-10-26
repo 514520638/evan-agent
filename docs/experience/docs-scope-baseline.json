@@ -1,0 +1,37 @@
+{
+  "id": "docs-scope-baseline",
+  "title": "纯文档验证需要核对起始基线与当前实际文件",
+  "source": "workflow-recovery-evidence 的文档门禁返工及 2026-10-26 回归",
+  "tags": [
+    "文档",
+    "基线",
+    "暂存区",
+    "验证",
+    "docs",
+    "workflow"
+  ],
+  "sources": [
+    {
+      "path": "tests/test_workflow.py",
+      "sha256": "f1679698604aa81295240a6215e2479aad96790196b8795f9873f9d015601de3"
+    }
+  ],
+  "status": "active",
+  "outcome": "verified",
+  "evidence": "test_docs_only_rejects_changed_code、test_docs_only_rejects_untracked_code、test_docs_only_rejects_deleted_code、test_docs_only_checks_staged_code_even_if_worktree_is_restored 实际通过",
+  "applies_when": [
+    "任务拟采用 low docs-only 验证",
+    "工作树中可能已有其他修改或存在暂存区变化"
+  ],
+  "counterexamples": [
+    "档位与文件扩展名本身不能证明没有可执行变更",
+    "基线缺失或跨机器不可用时不能补造基线"
+  ],
+  "recommendation": "保留 intake 时的起始基线，检查工作树及索引变化；无法证明仅文档时执行完整检查",
+  "supersedes": [],
+  "version": 1,
+  "kind": "experience",
+  "revision": 1,
+  "history": [],
+  "updated_at": "2026-10-26T01:37:17.784792+00:00"
+}

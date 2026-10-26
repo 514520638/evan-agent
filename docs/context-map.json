@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "modules": [
+    {"id": "workflow", "title": "开发请求、授权、任务恢复与验证", "tags": ["工作流", "开发", "授权", "返工", "workflow", "check"], "paths": ["docs/DEVELOPMENT.md", "docs/WORKFLOW_PROTOCOL.md", "scripts/workflow.py", "scripts/workflow_protocol.py", "scripts/check.py", "tests/test_workflow.py", "tests/test_workflow_protocol.py"]},
+    {"id": "context", "title": "故事线、上下文检索与经验管理", "tags": ["故事线", "上下文", "经验", "context", "story", "experience"], "paths": ["docs/WORKFLOW_PROTOCOL.md", "scripts/workflow_knowledge.py", "tests/test_workflow_protocol.py"]},
+    {"id": "auth", "title": "身份与权限", "tags": ["身份", "登录", "权限", "auth"], "paths": ["src/evan_agent/auth.py", "tests/test_auth.py", "tests/test_auth_cli.py"]},
+    {"id": "http", "title": "HTTP、Cookie 与 API 契约", "tags": ["http", "api", "cookie", "接口"], "paths": ["docs/API.md", "src/evan_agent/api.py", "src/evan_agent/http_auth.py", "tests/test_api.py"]},
+    {"id": "sessions", "title": "聊天隔离、历史与流式提交", "tags": ["会话", "聊天", "历史", "流式", "stream", "sessions"], "paths": ["src/evan_agent/sessions.py", "tests/test_sessions.py", "tests/test_streaming.py"]},
+    {"id": "memory", "title": "记忆人工审批与知识存储", "tags": ["记忆", "审批", "知识", "存储", "memory", "knowledge", "hitl"], "paths": ["src/evan_agent/memory_review.py", "src/evan_agent/knowledge.py", "src/evan_agent/knowledge_tools.py", "tests/test_memory_review.py", "tests/test_knowledge.py", "tests/test_knowledge_tools.py"]},
+    {"id": "service", "title": "模型装配与服务入口", "tags": ["模型", "装配", "入口", "service", "persona"], "paths": ["src/evan_agent/service.py", "src/evan_agent/main.py", "tests/test_persona.py"]},
+    {"id": "middleware", "title": "审计、限额与摘要", "tags": ["审计", "限额", "摘要", "middleware"], "paths": ["src/evan_agent/middleware.py", "tests/test_middleware.py"]},
+    {"id": "terminal", "title": "终端与资料命令", "tags": ["终端", "命令", "terminal", "profile"], "paths": ["src/evan_agent/terminal.py", "src/evan_agent/profile_commands.py", "tests/test_terminal.py", "tests/test_profile_commands.py"]}
+  ]
+}

@@ -1,0 +1,414 @@
+{
+  "version": 2,
+  "key": "workflow-recovery-evidence",
+  "mode": "full",
+  "request": "落地返工恢复、AC 到测试的映射、验证范围防误用，沿用任务记录和 Python 脚本，保持轻量。",
+  "scope": "允许改变：工作流脚本、对应测试、开发文档、本任务记录，以及用户确认的六个本机文件的 Git 跟踪状态（仅取消跟踪、保留文件）；保留：业务源码、其余既有用户改动、旧记录可读、用户验收独立、离线验证和不自动提交。",
+  "acceptance": [
+    {
+      "id": "AC1",
+      "criterion": "同一 key 返工保留历史和来源，显式更新当前范围及 AC，清除过期证据并恢复剩余里程碑。",
+      "evidence": "scripts/workflow.py 的 rework/progress/resume 保存历史来源、AC 保留/替换/撤回、当前有效约定和剩余里程碑；映射的四个恢复与真实 CLI 用例在本次 full check 全部通过。本任务也已用 rework 记录用户对索引清理的补充授权，原 AC 映射得以保留。",
+      "source": "本轮用户要求：返工恢复，保持单记录与原有授权边界",
+      "tests": [
+        "test_workflow.WorkflowTests.test_rework_archives_previous_contract_and_invalidates_acceptance",
+        "test_workflow.WorkflowTests.test_rework_retains_selected_context_and_does_not_reuse_withdrawn_ids",
+        "test_workflow.WorkflowTests.test_progress_clears_old_evidence_and_can_replace_or_clear_milestones",
+        "test_workflow.WorkflowTests.test_real_cli_round_trip_and_rework"
+      ],
+      "manual": "",
+      "verification": {
+        "status": "passed",
+        "gaps": []
+      }
+    },
+    {
+      "id": "AC2",
+      "criterion": "AC 映射实际测试或明确的人工检查，记录通过、失败、跳过及未执行；完成不能用未覆盖或过期结果冒充通过。",
+      "evidence": "scripts/run_tests.py 记录实际 unittest 结果；check.py 按完整用例 ID 回写 AC 状态；workflow.py 的 map/observe/completion 拒绝漏跑、跳过、缺失报告及过期证据。八个映射用例全部通过，包括真实子进程报告、subtest、人工观察和 JSON 夹具变化。",
+      "source": "本轮用户要求：AC 到实际测试结果的映射，保留人工检查的明确边界",
+      "tests": [
+        "test_workflow.WorkflowTests.test_targeted_run_must_execute_every_mapped_case",
+        "test_workflow.WorkflowTests.test_skipped_mapped_case_is_not_a_pass",
+        "test_workflow.WorkflowTests.test_unmapped_skips_are_reported_without_claiming_they_passed",
+        "test_workflow.WorkflowTests.test_manual_check_needs_actual_fresh_observation",
+        "test_workflow.WorkflowTests.test_mapping_or_fixture_change_invalidates_completion",
+        "test_workflow.TestRunnerTests.test_report_records_real_outcomes_and_subtests",
+        "test_workflow.TestRunnerTests.test_runner_cli_writes_report_from_real_test_execution",
+        "test_workflow.WorkflowTests.test_missing_runner_report_cannot_reuse_previous_pass"
+      ],
+      "manual": "",
+      "verification": {
+        "status": "passed",
+        "gaps": []
+      }
+    },
+    {
+      "id": "AC3",
+      "criterion": "仅文档检查核对真实改动；聚焦检查覆盖映射测试；保留 full 全量约束及旧记录兼容。",
+      "evidence": "文档检查的修改/新增/删除代码用例先出现预期断言失败，修复后通过；暂存区隐藏改动、配置文件、起始脏工作树、基线丢失、返工重置规避、full 降级及 v1 兼容等十一项映射用例全部通过。docs/DEVELOPMENT.md 与 CLI 帮助已核对；当前 full check 和 doctor 通过。",
+      "source": "本轮用户要求：验证范围防误用，保留 full 约束及旧记录兼容",
+      "tests": [
+        "test_workflow.WorkflowTests.test_docs_only_rejects_changed_code",
+        "test_workflow.WorkflowTests.test_docs_only_rejects_untracked_code",
+        "test_workflow.WorkflowTests.test_docs_only_rejects_deleted_code",
+        "test_workflow.WorkflowTests.test_docs_only_checks_staged_code_even_if_worktree_is_restored",
+        "test_workflow.WorkflowTests.test_docs_only_allows_unchanged_preexisting_code_and_new_docs",
+        "test_workflow.WorkflowTests.test_docs_only_rejects_config_and_code_disguised_as_document",
+        "test_workflow.WorkflowTests.test_docs_only_requires_record_and_original_baseline",
+        "test_workflow.WorkflowTests.test_rework_cannot_reset_baseline_to_hide_code_changes",
+        "test_workflow.WorkflowTests.test_full_check_cannot_be_downgraded",
+        "test_workflow.WorkflowTests.test_full_completion_rejects_targeted_verification",
+        "test_workflow.WorkflowTests.test_v1_history_is_readable_and_upgraded_only_when_edited"
+      ],
+      "manual": "",
+      "verification": {
+        "status": "passed",
+        "gaps": []
+      }
+    }
+  ],
+  "decisions": [
+    "保持单记录；新记录 v2，旧记录按需升级；返工不重置基线，逐 AC 使用实际测试结果。"
+  ],
+  "gaps": [
+    "本地仅 Windows/Python 3.12；Linux、Python 3.11、远端 CI 和真实模型联调未执行。"
+  ],
+  "next_action": "等待用户验收",
+  "implementation": "completed",
+  "verification": {
+    "status": "passed",
+    "scope": "full",
+    "at": "2026-10-26T01:01:45.578609+00:00",
+    "python": "3.12.14",
+    "platform": "win32",
+    "fingerprint": "f780d622e35c90133d10d9d28ea9f09f2587345774a97209012b830be88a45c1",
+    "errors": [],
+    "checks": [
+      {
+        "name": "lint",
+        "command": [
+          "python",
+          "-m",
+          "ruff",
+          "check",
+          "src",
+          "tests",
+          "scripts"
+        ],
+        "exit_code": 0,
+        "seconds": 0.27
+      },
+      {
+        "name": "tests",
+        "command": [
+          "python",
+          "scripts/run_tests.py",
+          "--report",
+          ".workflow/tests-_n5lxj0x.json"
+        ],
+        "exit_code": 0,
+        "seconds": 96.86
+      }
+    ],
+    "intent_fingerprint": "5a88bb03a2eebf28cfd0679d095c27c6521d61acd8fc1515a95041e6b799af21",
+    "tests": {
+      "tests_run": 108,
+      "skipped": 2,
+      "cases": [
+        {
+          "id": "test_auth.AuthTests.test_credentials_file_has_owner_only_posix_permissions",
+          "status": "skipped",
+          "reason": "POSIX mode bits only; Windows ACL is not verified"
+        },
+        {
+          "id": "test_knowledge.KnowledgeTests.test_knowledge_file_has_owner_only_posix_permissions",
+          "status": "skipped",
+          "reason": "POSIX mode bits only; Windows ACL is not verified"
+        },
+        {
+          "id": "test_workflow.TestRunnerTests.test_report_records_real_outcomes_and_subtests",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.TestRunnerTests.test_runner_cli_writes_report_from_real_test_execution",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_docs_only_allows_unchanged_preexisting_code_and_new_docs",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_docs_only_checks_staged_code_even_if_worktree_is_restored",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_docs_only_rejects_changed_code",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_docs_only_rejects_config_and_code_disguised_as_document",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_docs_only_rejects_deleted_code",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_docs_only_rejects_untracked_code",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_docs_only_requires_record_and_original_baseline",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_full_check_cannot_be_downgraded",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_full_completion_rejects_targeted_verification",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_manual_check_needs_actual_fresh_observation",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_mapping_or_fixture_change_invalidates_completion",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_missing_runner_report_cannot_reuse_previous_pass",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_progress_clears_old_evidence_and_can_replace_or_clear_milestones",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_real_cli_round_trip_and_rework",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_rework_archives_previous_contract_and_invalidates_acceptance",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_rework_cannot_reset_baseline_to_hide_code_changes",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_rework_retains_selected_context_and_does_not_reuse_withdrawn_ids",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_skipped_mapped_case_is_not_a_pass",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_targeted_run_must_execute_every_mapped_case",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_unmapped_skips_are_reported_without_claiming_they_passed",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_v1_history_is_readable_and_upgraded_only_when_edited",
+          "status": "passed"
+        }
+      ],
+      "case_details": "mapped_and_nonpassing"
+    }
+  },
+  "acceptance_status": "pending",
+  "result": "已落地 rework 修订恢复、AC 测试/人工映射及范围门禁，沿用单 JSON 记录和三个 Python 脚本，无新增依赖。full check：108 用例，106 通过、2 个 POSIX 平台用例跳过；doctor、Ruff、uv sync --locked、uv lock --check、uv build 和 diff 检查通过；构建包路径检查未发现私有运行数据。按用户明确授权取消六个本机文件的 Git 跟踪，逐一确认本地文件保留。未提交或推送；Linux/Python 3.11、远端 CI 与真实模型联调未执行。",
+  "updated_at": "2026-10-26T01:04:17.157601+00:00",
+  "revision": 2,
+  "remaining_milestones": [],
+  "history": [
+    {
+      "at": "2026-10-26T00:56:16.216726+00:00",
+      "source": "v1 记录升级",
+      "previous": {
+        "version": 1,
+        "key": "workflow-recovery-evidence",
+        "mode": "full",
+        "request": "落地返工恢复、AC 到测试的映射、验证范围防误用，沿用任务记录和 Python 脚本，保持轻量。",
+        "scope": "允许改变：工作流脚本、对应测试、开发文档和本任务记录；保留：业务源码、既有用户改动、旧记录可读、用户验收独立、离线验证和不自动提交。",
+        "acceptance": [
+          {
+            "id": "AC1",
+            "criterion": "同一 key 返工保留历史和来源，显式更新当前范围及 AC，清除过期证据并恢复剩余里程碑。",
+            "evidence": ""
+          },
+          {
+            "id": "AC2",
+            "criterion": "AC 映射实际测试或明确的人工检查，记录通过、失败、跳过及未执行；完成不能用未覆盖或过期结果冒充通过。",
+            "evidence": ""
+          },
+          {
+            "id": "AC3",
+            "criterion": "仅文档检查核对真实改动；聚焦检查覆盖映射测试；保留 full 全量约束及旧记录兼容。",
+            "evidence": ""
+          }
+        ],
+        "decisions": [],
+        "gaps": [],
+        "next_action": "读取相关代码并确定验证基线",
+        "implementation": "in_progress",
+        "verification": {
+          "status": "pending"
+        },
+        "acceptance_status": "pending",
+        "result": "",
+        "updated_at": "2026-10-26T00:46:35.249818+00:00"
+      }
+    },
+    {
+      "at": "2026-10-26T01:01:43.460543+00:00",
+      "source": "用户回复：允许取消跟踪，保留本地文件；限定本次 doctor 报告的 .env、三个审计日志、auth.sqlite3 和 knowledge.sqlite3。",
+      "previous": {
+        "version": 2,
+        "key": "workflow-recovery-evidence",
+        "mode": "full",
+        "request": "落地返工恢复、AC 到测试的映射、验证范围防误用，沿用任务记录和 Python 脚本，保持轻量。",
+        "scope": "允许改变：工作流脚本、对应测试、开发文档和本任务记录；保留：业务源码、既有用户改动、旧记录可读、用户验收独立、离线验证和不自动提交。",
+        "acceptance": [
+          {
+            "id": "AC1",
+            "criterion": "同一 key 返工保留历史和来源，显式更新当前范围及 AC，清除过期证据并恢复剩余里程碑。",
+            "evidence": "",
+            "source": "本轮用户要求：返工恢复，保持单记录与原有授权边界",
+            "tests": [
+              "test_workflow.WorkflowTests.test_rework_archives_previous_contract_and_invalidates_acceptance",
+              "test_workflow.WorkflowTests.test_rework_retains_selected_context_and_does_not_reuse_withdrawn_ids",
+              "test_workflow.WorkflowTests.test_progress_clears_old_evidence_and_can_replace_or_clear_milestones",
+              "test_workflow.WorkflowTests.test_real_cli_round_trip_and_rework"
+            ],
+            "manual": "",
+            "verification": {
+              "status": "not_run",
+              "gaps": [
+                "test_workflow.WorkflowTests.test_rework_archives_previous_contract_and_invalidates_acceptance: not_run",
+                "test_workflow.WorkflowTests.test_rework_retains_selected_context_and_does_not_reuse_withdrawn_ids: not_run",
+                "test_workflow.WorkflowTests.test_progress_clears_old_evidence_and_can_replace_or_clear_milestones: not_run",
+                "test_workflow.WorkflowTests.test_real_cli_round_trip_and_rework: not_run"
+              ]
+            }
+          },
+          {
+            "id": "AC2",
+            "criterion": "AC 映射实际测试或明确的人工检查，记录通过、失败、跳过及未执行；完成不能用未覆盖或过期结果冒充通过。",
+            "evidence": "",
+            "source": "本轮用户要求：AC 到实际测试结果的映射，保留人工检查的明确边界",
+            "tests": [
+              "test_workflow.WorkflowTests.test_targeted_run_must_execute_every_mapped_case",
+              "test_workflow.WorkflowTests.test_skipped_mapped_case_is_not_a_pass",
+              "test_workflow.WorkflowTests.test_unmapped_skips_are_reported_without_claiming_they_passed",
+              "test_workflow.WorkflowTests.test_manual_check_needs_actual_fresh_observation",
+              "test_workflow.WorkflowTests.test_mapping_or_fixture_change_invalidates_completion",
+              "test_workflow.TestRunnerTests.test_report_records_real_outcomes_and_subtests",
+              "test_workflow.TestRunnerTests.test_runner_cli_writes_report_from_real_test_execution",
+              "test_workflow.WorkflowTests.test_missing_runner_report_cannot_reuse_previous_pass"
+            ],
+            "manual": "",
+            "verification": {
+              "status": "not_run",
+              "gaps": [
+                "test_workflow.WorkflowTests.test_targeted_run_must_execute_every_mapped_case: not_run",
+                "test_workflow.WorkflowTests.test_skipped_mapped_case_is_not_a_pass: not_run",
+                "test_workflow.WorkflowTests.test_unmapped_skips_are_reported_without_claiming_they_passed: not_run",
+                "test_workflow.WorkflowTests.test_manual_check_needs_actual_fresh_observation: not_run",
+                "test_workflow.WorkflowTests.test_mapping_or_fixture_change_invalidates_completion: not_run",
+                "test_workflow.TestRunnerTests.test_report_records_real_outcomes_and_subtests: not_run",
+                "test_workflow.TestRunnerTests.test_runner_cli_writes_report_from_real_test_execution: not_run",
+                "test_workflow.WorkflowTests.test_missing_runner_report_cannot_reuse_previous_pass: not_run"
+              ]
+            }
+          },
+          {
+            "id": "AC3",
+            "criterion": "仅文档检查核对真实改动；聚焦检查覆盖映射测试；保留 full 全量约束及旧记录兼容。",
+            "evidence": "",
+            "source": "本轮用户要求：验证范围防误用，保留 full 约束及旧记录兼容",
+            "tests": [
+              "test_workflow.WorkflowTests.test_docs_only_rejects_changed_code",
+              "test_workflow.WorkflowTests.test_docs_only_rejects_untracked_code",
+              "test_workflow.WorkflowTests.test_docs_only_rejects_deleted_code",
+              "test_workflow.WorkflowTests.test_docs_only_checks_staged_code_even_if_worktree_is_restored",
+              "test_workflow.WorkflowTests.test_docs_only_allows_unchanged_preexisting_code_and_new_docs",
+              "test_workflow.WorkflowTests.test_docs_only_rejects_config_and_code_disguised_as_document",
+              "test_workflow.WorkflowTests.test_docs_only_requires_record_and_original_baseline",
+              "test_workflow.WorkflowTests.test_rework_cannot_reset_baseline_to_hide_code_changes",
+              "test_workflow.WorkflowTests.test_full_check_cannot_be_downgraded",
+              "test_workflow.WorkflowTests.test_full_completion_rejects_targeted_verification",
+              "test_workflow.WorkflowTests.test_v1_history_is_readable_and_upgraded_only_when_edited"
+            ],
+            "manual": "",
+            "verification": {
+              "status": "not_run",
+              "gaps": [
+                "test_workflow.WorkflowTests.test_docs_only_rejects_changed_code: not_run",
+                "test_workflow.WorkflowTests.test_docs_only_rejects_untracked_code: not_run",
+                "test_workflow.WorkflowTests.test_docs_only_rejects_deleted_code: not_run",
+                "test_workflow.WorkflowTests.test_docs_only_checks_staged_code_even_if_worktree_is_restored: not_run",
+                "test_workflow.WorkflowTests.test_docs_only_allows_unchanged_preexisting_code_and_new_docs: not_run",
+                "test_workflow.WorkflowTests.test_docs_only_rejects_config_and_code_disguised_as_document: not_run",
+                "test_workflow.WorkflowTests.test_docs_only_requires_record_and_original_baseline: not_run",
+                "test_workflow.WorkflowTests.test_rework_cannot_reset_baseline_to_hide_code_changes: not_run",
+                "test_workflow.WorkflowTests.test_full_check_cannot_be_downgraded: not_run",
+                "test_workflow.WorkflowTests.test_full_completion_rejects_targeted_verification: not_run",
+                "test_workflow.WorkflowTests.test_v1_history_is_readable_and_upgraded_only_when_edited: not_run"
+              ]
+            }
+          }
+        ],
+        "decisions": [
+          "保持单记录；新记录 v2，旧记录按需升级；返工不重置基线，逐 AC 使用实际测试结果。"
+        ],
+        "gaps": [
+          "本地仅 Windows/Python 3.12；Linux、Python 3.11、远端 CI 和真实模型联调未执行。"
+        ],
+        "next_action": "完成边界自审、真实 CLI 验证与全量 check",
+        "implementation": "in_progress",
+        "verification": {
+          "status": "failed",
+          "scope": "full",
+          "at": "2026-10-26T01:01:26.623758+00:00",
+          "python": "3.12.14",
+          "platform": "win32",
+          "fingerprint": "f780d622e35c90133d10d9d28ea9f09f2587345774a97209012b830be88a45c1",
+          "errors": [
+            "禁止跟踪本地敏感路径：.env",
+            "禁止跟踪本地敏感路径：.local/audit/2026-10-21.jsonl",
+            "禁止跟踪本地敏感路径：.local/audit/2026-10-22.jsonl",
+            "禁止跟踪本地敏感路径：.local/audit/2026-10-23.jsonl",
+            "禁止跟踪本地敏感路径：.local/auth.sqlite3",
+            "禁止跟踪本地敏感路径：.local/knowledge.sqlite3"
+          ],
+          "checks": [],
+          "intent_fingerprint": "8cd31d4d73a2de48d3aeda5b9da26c32ef662b25d171f4459432ab7e9ebd84a8"
+        },
+        "acceptance_status": "pending",
+        "result": "",
+        "updated_at": "2026-10-26T01:01:26.627428+00:00",
+        "revision": 1,
+        "remaining_milestones": [
+          "检查文档与 CLI 一致",
+          "运行 full 并逐 AC 交付"
+        ]
+      },
+      "acceptance_changes": {
+        "AC1": "retained",
+        "AC2": "retained",
+        "AC3": "retained"
+      },
+      "context_review": {
+        "decisions": "retained",
+        "gaps": "retained"
+      }
+    }
+  ]
+}
