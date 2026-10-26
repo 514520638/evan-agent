@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "key": "ai-workflow-bootstrap",
+  "mode": "full",
+  "request": "帮这个项目落地一套轻量的 AI 开发工作流：参考本地项目中的 aurora_front 中的工作流实现。",
+  "scope": "允许：开发指引、紧凑规格与记录、恢复、检查脚本、测试平台适配、CI、索引卫生；保留：src 下全部产品行为、真实本机配置与数据库。",
+  "acceptance": [
+    {
+      "id": "AC1",
+      "criterion": "三档工作流、稳定记录、恢复和完成命令可用，自动验证不冒充用户验收。",
+      "evidence": "AGENTS.md、docs/DEVELOPMENT.md、scripts/workflow.py；20 项工作流行为测试覆盖 intake/progress/resume/completion、歧义任务、验收编号和用户确认分离。"
+    },
+    {
+      "id": "AC2",
+      "criterion": "统一检查能发现敏感路径、无效记录、测试失败和过期证据，具备行为回归测试。",
+      "evidence": "scripts/check.py 与 tests/test_workflow.py；路径门禁先出现预期断言失败再通过；测试验证无效记录、零测试、检查失败、过期代码和需求证据均被拒绝。"
+    },
+    {
+      "id": "AC3",
+      "criterion": "本地全量检查与包构建通过；Windows/Linux CI 使用同一入口，未运行的平台如实标注。",
+      "evidence": "Windows/Python 3.12 全量 check：85 项中 83 通过、2 项 POSIX 权限测试跳过；Ruff、doctor、uv lock --check、uv build 和 CI YAML 矩阵校验通过；Linux/3.11 尚未远端执行。"
+    },
+    {
+      "id": "AC4",
+      "criterion": "真实配置与数据库只解除 Git 跟踪，本机文件保留，产品源码不变。",
+      "evidence": "git diff --quiet -- src 返回 0；六个敏感文件仅 git rm --cached，本机文件仍存在；构建产物路径检查不包含私人运行数据；历史提交未清理。"
+    }
+  ],
+  "decisions": [
+    "参考 aurora_front e7d453fe；使用单条本地 Git 记录承载规格和恢复，不引入 Memini 或多 Agent。路径门禁完成了一次实际断言失败到通过的红绿循环。"
+  ],
+  "gaps": [
+    "本机仅验证 Windows/Python 3.12；Linux/Python 3.11 的 CI 尚未远端执行，Windows ACL 不在本次实现范围。历史敏感文件和密钥轮换尚未处理。"
+  ],
+  "next_action": "等待用户验收",
+  "implementation": "completed",
+  "verification": {
+    "status": "passed",
+    "scope": "full",
+    "at": "2026-10-23T10:08:52.942830+00:00",
+    "python": "3.12.14",
+    "platform": "win32",
+    "fingerprint": "f1496f154b4110c70162d59f2c53a1a25609bbaf2650801c275984f36aaf126b",
+    "errors": [],
+    "checks": [
+      {
+        "name": "lint",
+        "command": [
+          "python",
+          "-m",
+          "ruff",
+          "check",
+          "src",
+          "tests",
+          "scripts"
+        ],
+        "exit_code": 0,
+        "seconds": 0.16
+      },
+      {
+        "name": "tests",
+        "command": [
+          "python",
+          "scripts/run_tests.py"
+        ],
+        "exit_code": 0,
+        "seconds": 42.47
+      }
+    ],
+    "intent_fingerprint": "b8aab6d6690646552a6299649c8da1f82eb01f7b6ce79432cd5eb81b1d6f3e7d"
+  },
+  "acceptance_status": "pending",
+  "result": "完成 Aurora 风格的本地轻量 AI 工作流：三档、单条规格和任务记录、恢复与完成门禁、统一检查、CI、PR 模板及敏感路径保护。src 产品源码未变。",
+  "updated_at": "2026-10-23T10:10:24.973789+00:00"
+}

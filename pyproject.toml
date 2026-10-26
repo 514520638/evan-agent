@@ -25,3 +25,15 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/evan_agent"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# Start with high-confidence correctness checks; avoid unrelated style rewrites.
+select = ["E9", "F63", "F7", "F82"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.2",
+]

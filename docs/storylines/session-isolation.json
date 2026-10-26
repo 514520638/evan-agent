@@ -1,0 +1,99 @@
+{
+  "id": "session-isolation",
+  "title": "会话身份、聊天隔离与结果有效性",
+  "source": "2026-10-26 对 sessions.py 和 test_sessions.py 当前行为的只读核对",
+  "status": "observed",
+  "tags": [
+    "会话",
+    "身份",
+    "登录",
+    "隔离",
+    "sessions",
+    "auth"
+  ],
+  "sources": [
+    {
+      "path": "src/evan_agent/sessions.py",
+      "sha256": "1ef02d409b6c11cd0abdb424b7b3af706f70774a133132672f307b50aa8059f6"
+    },
+    {
+      "path": "src/evan_agent/auth.py",
+      "sha256": "af30f90e899d74c55ef9f507d5abe093f8d479fe07fb275b12a72b9cb8292714"
+    },
+    {
+      "path": "tests/test_sessions.py",
+      "sha256": "165bd1b4564789c6d537aec88a9e29aef8057307ca341bca5a9a3ff9c2039116"
+    }
+  ],
+  "actors": [
+    "当前身份用户",
+    "其他访客或另一登录实例"
+  ],
+  "preconditions": [
+    "通过程序上下文携带身份",
+    "聊天由 SessionStore 创建"
+  ],
+  "invariants": [
+    "聊天 ID 不授予访问权限",
+    "不同聊天历史隔离",
+    "相同 owner 用户的不同登录实例仍隔离",
+    "请求完成时身份与会话仍须有效"
+  ],
+  "scenarios": [
+    {
+      "id": "independent-history",
+      "title": "同一身份的多个聊天相互隔离",
+      "given": "同一身份拥有两个聊天",
+      "when": "交替发送消息",
+      "then": "各聊天仅携带自己的历史，运行上下文带当前 conversation_id",
+      "from": "ready",
+      "to": "history-updated",
+      "tests": [
+        "test_sessions.SessionTests.test_independent_history_and_runtime_context"
+      ]
+    },
+    {
+      "id": "foreign-access",
+      "title": "拒绝其他身份与登录实例",
+      "given": "聊天属于另一身份或登录实例",
+      "when": "读取、清理或调用聊天",
+      "then": "拒绝访问；陌生访客调用不会执行模型",
+      "from": "owned",
+      "to": "owned",
+      "tests": [
+        "test_sessions.SessionTests.test_foreign_guest_cannot_read_clear_or_invoke",
+        "test_sessions.SessionTests.test_owner_login_instances_are_isolated"
+      ]
+    },
+    {
+      "id": "expired-result",
+      "title": "过期或注销后的结果不提交",
+      "given": "模型请求尚在执行",
+      "when": "身份过期或会话被注销",
+      "then": "拒绝返回旧请求的有效结果，过期请求不写历史",
+      "from": "running",
+      "to": "invalidated",
+      "tests": [
+        "test_sessions.SessionTests.test_expiry_during_request_does_not_return_private_result",
+        "test_sessions.SessionTests.test_logout_during_request_invalidates_pending_result"
+      ]
+    },
+    {
+      "id": "clear-scope",
+      "title": "清理当前聊天与注销身份",
+      "given": "当前身份拥有多个聊天",
+      "when": "清理一个聊天或注销身份",
+      "then": "单聊天清理保留其他历史，注销丢弃该身份的所有聊天",
+      "from": "history-present",
+      "to": "cleared",
+      "tests": [
+        "test_sessions.SessionTests.test_clear_only_current_and_logout_removes_all"
+      ]
+    }
+  ],
+  "version": 1,
+  "kind": "story",
+  "revision": 1,
+  "history": [],
+  "updated_at": "2026-10-26T01:37:17.744115+00:00"
+}

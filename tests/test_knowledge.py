@@ -4,6 +4,7 @@ from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 import sqlite3
+import os
 import tempfile
 import time
 import unittest
@@ -27,6 +28,9 @@ class KnowledgeTests(unittest.TestCase):
         restored = KnowledgeStore(self.path).get(self.owner, item.id)
         self.assertEqual(restored, item)
         self.assertEqual(restored.content, '  第一行\n第二行  ')
+
+    @unittest.skipUnless(os.name == "posix", "POSIX mode bits only; Windows ACL is not verified")
+    def test_knowledge_file_has_owner_only_posix_permissions(self):
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
 
     def test_only_public_published_visible_to_guest(self):

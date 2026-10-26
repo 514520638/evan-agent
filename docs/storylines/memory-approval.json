@@ -1,0 +1,105 @@
+{
+  "id": "memory-approval",
+  "title": "长期记忆写入的人工审批与恢复",
+  "source": "2026-10-26 对审批器、会话状态机和离线 HITL 测试的核对；记录现状，不修复既有默认值差异",
+  "status": "observed",
+  "tags": [
+    "记忆",
+    "审批",
+    "确认",
+    "取消",
+    "memory",
+    "hitl",
+    "knowledge"
+  ],
+  "sources": [
+    {
+      "path": "src/evan_agent/memory_review.py",
+      "sha256": "180d92ff59adfdde777d5c5e6bd973cac2be9d9964cbe5b2953a4f934de9b3d8"
+    },
+    {
+      "path": "src/evan_agent/sessions.py",
+      "sha256": "1ef02d409b6c11cd0abdb424b7b3af706f70774a133132672f307b50aa8059f6"
+    },
+    {
+      "path": "src/evan_agent/knowledge_tools.py",
+      "sha256": "04fe859f6dc45da2475093898289b5b8e8c877fc9ad3de2b55ff06e5ccef9235"
+    },
+    {
+      "path": "tests/test_memory_review.py",
+      "sha256": "1e29b260dd0410e6f7e32c43d1d94c8c5532c9553ae78c4499b3d8c4ec9dbcd3"
+    }
+  ],
+  "actors": [
+    "本人身份用户",
+    "模型提出写入工具调用",
+    "人工审批器"
+  ],
+  "preconditions": [
+    "本人身份有效",
+    "工具调用触发 HITL 中断"
+  ],
+  "invariants": [
+    "模型提案不自行授权写入",
+    "确认前可修改内容和可见性等字段",
+    "取消待审批批次不恢复其中的写入",
+    "新增缺省 public/published，更新审批采用原记录的可见性与状态作为交互默认值；这是观察到的行为，不是新的目标授权",
+    "本故事线不声明已完成长期写入在后续失败时自动回滚"
+  ],
+  "scenarios": [
+    {
+      "id": "edit-confirm",
+      "title": "编辑并确认新增资料",
+      "given": "新增写入处于待审批状态",
+      "when": "本人补充内容并确认写入",
+      "then": "确认前存储无新增记录，恢复后保存编辑结果；当前缺省可被访客查询",
+      "from": "pending-review",
+      "to": "saved",
+      "tests": [
+        "test_memory_review.MemoryReviewTests.test_write_pauses_then_saves_edited_information"
+      ]
+    },
+    {
+      "id": "cancel",
+      "title": "取消新增或更新",
+      "given": "批次尚未确认",
+      "when": "用户取消",
+      "then": "新增不写入且不提交本轮聊天历史，取消更新保持原内容",
+      "from": "pending-review",
+      "to": "cancelled",
+      "tests": [
+        "test_memory_review.MemoryReviewTests.test_cancel_does_not_write_or_commit_history",
+        "test_memory_review.MemoryReviewTests.test_update_waits_for_confirmation_and_keeps_original_on_cancel"
+      ]
+    },
+    {
+      "id": "missing-reviewer",
+      "title": "缺少审批器",
+      "given": "工具要求写入审批",
+      "when": "会话没有提供审批器",
+      "then": "失败关闭，不执行写入",
+      "from": "pending-review",
+      "to": "cancelled",
+      "tests": [
+        "test_memory_review.MemoryReviewTests.test_missing_reviewer_fails_closed"
+      ]
+    },
+    {
+      "id": "expiry",
+      "title": "审批期间登录过期",
+      "given": "审批中身份有效性发生变化",
+      "when": "尝试恢复执行",
+      "then": "再次授权检查拒绝恢复，清理临时检查点",
+      "from": "pending-review",
+      "to": "invalidated",
+      "tests": [
+        "test_memory_review.MemoryReviewTests.test_expired_login_during_review_prevents_resume"
+      ]
+    }
+  ],
+  "version": 1,
+  "kind": "story",
+  "revision": 1,
+  "history": [],
+  "updated_at": "2026-10-26T01:37:17.758978+00:00"
+}

@@ -4,6 +4,7 @@ from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 import sqlite3
+import os
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -73,6 +74,9 @@ class AuthTests(unittest.TestCase):
             b = second.execute("SELECT salt, digest FROM owner").fetchone()
         self.assertNotEqual(a, b)
         self.assertNotIn(self.password.encode(), self.path.read_bytes())
+
+    @unittest.skipUnless(os.name == "posix", "POSIX mode bits only; Windows ACL is not verified")
+    def test_credentials_file_has_owner_only_posix_permissions(self):
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
 
     def test_password_pipe_is_rejected(self):

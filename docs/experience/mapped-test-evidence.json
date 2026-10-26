@@ -1,0 +1,36 @@
+{
+  "id": "mapped-test-evidence",
+  "title": "用 AC 映射用例的实际结果判断验证完成",
+  "source": "workflow-recovery-evidence 任务及 2026-10-26 新旧工作流 67 项回归",
+  "tags": [
+    "测试",
+    "验收",
+    "跳过",
+    "AC",
+    "workflow"
+  ],
+  "sources": [
+    {
+      "path": "tests/test_workflow.py",
+      "sha256": "f1679698604aa81295240a6215e2479aad96790196b8795f9873f9d015601de3"
+    }
+  ],
+  "status": "active",
+  "outcome": "verified",
+  "evidence": "test_targeted_run_must_execute_every_mapped_case 和 test_skipped_mapped_case_is_not_a_pass 等实际通过；漏跑或跳过映射用例时拒绝 completion",
+  "applies_when": [
+    "使用 unittest ID 映射 AC",
+    "聚焦测试或存在平台跳过项"
+  ],
+  "counterexamples": [
+    "无关平台用例跳过可以单独报告，不自动判定所有 AC 失败",
+    "测试通过不能证明断言语义覆盖正确"
+  ],
+  "recommendation": "读取当前运行的逐用例结果，逐条检查 AC 映射；不要只凭进程退出码或总通过数完成任务",
+  "supersedes": [],
+  "version": 1,
+  "kind": "experience",
+  "revision": 1,
+  "history": [],
+  "updated_at": "2026-10-26T01:37:17.774970+00:00"
+}

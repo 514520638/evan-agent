@@ -1,0 +1,385 @@
+{
+  "version": 2,
+  "revision": 1,
+  "history": [],
+  "remaining_milestones": [],
+  "key": "workflow-context-contracts",
+  "mode": "full",
+  "request": "落地前两期 AI 工作流：请求与授权、任务连续性、业务故事线、最小方案、渐进上下文与经验管理；保持兼容并验证",
+  "scope": "允许修改工作流脚本、测试、开发文档和脱敏任务/故事线/经验记录；保留业务源码、现有行为、旧记录可读性及现有命令，不提交推送，不读取真实私有数据",
+  "acceptance": [
+    {
+      "id": "AC1",
+      "criterion": "请求分类、授权来源和任务生命周期明确，插入问题不打断任务，修订与恢复不复用失效证据",
+      "source": "本轮用户要求落地前两期并保持兼容、验证",
+      "tests": [
+        "test_workflow_protocol.ProtocolTests.test_alignment_requires_source_and_preserved_scope_without_writing_failure",
+        "test_workflow_protocol.ProtocolTests.test_authorization_change_invalidates_intent_evidence",
+        "test_workflow_protocol.ProtocolTests.test_contract_change_during_check_cannot_overwrite_new_request_state",
+        "test_workflow_protocol.ProtocolTests.test_correction_requires_rework_then_alignment_and_new_plan",
+        "test_workflow_protocol.ProtocolTests.test_invalid_protocol_cannot_silently_pass_validation",
+        "test_workflow_protocol.ProtocolTests.test_multiple_active_tasks_never_guess_target",
+        "test_workflow_protocol.ProtocolTests.test_new_and_analysis_route_without_creating_or_selecting_task",
+        "test_workflow_protocol.ProtocolTests.test_pause_continue_cancel_and_retry_have_explicit_sources",
+        "test_workflow_protocol.ProtocolTests.test_question_and_status_preserve_current_task_and_evidence"
+      ],
+      "manual": "",
+      "evidence": "workflow_protocol.py 的请求类型、来源事件、授权和生命周期；9 个映射用例通过，覆盖状态询问保持任务、暂停继续取消、事件重试、纠正及验证期间契约变化。",
+      "verification": {
+        "status": "passed",
+        "gaps": []
+      }
+    },
+    {
+      "id": "AC2",
+      "criterion": "业务故事线版本与场景可关联 AC，最小方案记录复用、范围、验证和恢复，变化可追溯",
+      "source": "本轮用户要求落地前两期并保持兼容、验证",
+      "tests": [
+        "test_workflow_protocol.ProtocolTests.test_plan_versions_and_prior_decisions_are_preserved",
+        "test_workflow_protocol.ProtocolTests.test_story_link_detects_source_drift_and_changed_revision",
+        "test_workflow_protocol.ProtocolTests.test_draft_story_cannot_become_delivery_contract",
+        "test_workflow_protocol.ProtocolTests.test_changed_criteria_drop_story_links_and_rework_clears_exemption",
+        "test_workflow_protocol.ProtocolTests.test_protocol_preflight_blocks_check_before_running_tools",
+        "test_workflow_protocol.KnowledgeTests.test_asset_update_keeps_history_and_changes_digest",
+        "test_workflow_protocol.KnowledgeTests.test_bad_assets_and_duplicate_scenarios_do_not_write"
+      ],
+      "manual": "",
+      "evidence": "版本化故事线与稳定场景关联、同记录最小方案；7 个映射用例通过，覆盖来源漂移、版本失效、草案拒绝、改写 AC 撤下旧关联、方案前置检查及历史保留；已建立 3 条 observed 业务故事线。",
+      "verification": {
+        "status": "passed",
+        "gaps": []
+      }
+    },
+    {
+      "id": "AC3",
+      "criterion": "按需上下文检索和恢复摘要提供相关来源与新鲜度，拒绝越界和私有路径，不默认全量加载历史",
+      "source": "本轮用户要求落地前两期并保持兼容、验证",
+      "tests": [
+        "test_workflow_protocol.ProtocolTests.test_summary_keeps_current_boundaries_but_omits_event_and_rework_bodies",
+        "test_workflow_protocol.KnowledgeTests.test_private_and_outside_sources_rejected_before_read",
+        "test_workflow_protocol.KnowledgeTests.test_resolved_alias_into_private_directory_is_never_read",
+        "test_workflow_protocol.KnowledgeTests.test_progressive_context_and_budget_never_truncate_contracts",
+        "test_workflow_protocol.KnowledgeTests.test_retrieval_ignores_forged_index_and_reports_linked_stale_story",
+        "test_workflow_protocol.KnowledgeTests.test_context_map_and_doctor_reject_bad_references",
+        "test_workflow_protocol.KnowledgeTests.test_chinese_search_and_detail_requires_specific_context"
+      ],
+      "manual": "",
+      "evidence": "context-map.json 与 overview/related/detail、摘要及字符预算；7 个映射用例通过，覆盖旧历史不默认展开、关联契约不隐藏、过期提示、伪造缓存无效、路径穿越/私有路径/设备名/解析别名拒绝。",
+      "verification": {
+        "status": "passed",
+        "gaps": []
+      }
+    },
+    {
+      "id": "AC4",
+      "criterion": "经验具备证据、适用条件、反例和替代关系，可检索且失效内容不冒充有效经验",
+      "source": "本轮用户要求落地前两期并保持兼容、验证",
+      "tests": [
+        "test_workflow_protocol.KnowledgeTests.test_experience_supersession_cycle_and_missing_target_rejected",
+        "test_workflow_protocol.KnowledgeTests.test_experience_retrieval_filters_stale_rejected_and_superseded",
+        "test_workflow_protocol.KnowledgeTests.test_lessons_require_evidence_applicability_and_counterexamples"
+      ],
+      "manual": "",
+      "evidence": "docs/experience 的证据、适用条件、反例、结果与 supersedes；3 个映射用例通过，覆盖替代缺失/循环拒绝、过期与废弃结果筛选及必要字段；2 条经回归验证的经验入库。",
+      "verification": {
+        "status": "passed",
+        "gaps": []
+      }
+    },
+    {
+      "id": "AC5",
+      "criterion": "旧 v1/v2 记录和命令兼容，新增机制有临时仓库测试，文档与实际 CLI 一致且全量验证通过",
+      "source": "本轮用户要求落地前两期并保持兼容、验证",
+      "tests": [
+        "test_workflow_protocol.CliTests.test_real_cli_protocol_story_context_check_and_completion",
+        "test_workflow_protocol.ProtocolTests.test_v1_alignment_is_explicit_and_preserves_original_snapshot",
+        "test_workflow.WorkflowTests.test_real_cli_round_trip_and_rework",
+        "test_workflow.WorkflowTests.test_v1_history_is_readable_and_upgraded_only_when_edited"
+      ],
+      "manual": "对照实际 CLI 帮助核对开发入口、协议文档和种子故事线来源及参考测试；检查全部本次公开文件的空白错误",
+      "evidence": "新旧真实 CLI 回合、v1 主动升级保留快照及旧记录读取等 4 个映射用例通过；16 个 CLI 帮助与文档人工核对通过，来源及测试定位有效。全量 check passed：136 运行、134 通过、2 POSIX 跳过；锁检查、包构建及 diff 检查通过。",
+      "verification": {
+        "status": "passed",
+        "gaps": []
+      },
+      "manual_result": {
+        "status": "passed",
+        "evidence": "已逐项核对 16 个实际 CLI 帮助与文档参数；3 条 observed 故事线来源哈希有效且参考测试类/方法存在；2 条经验有适用条件和反例；本次 19 个公开文件无行尾空白。旧记录输出兼容由真实 CLI 测试覆盖。",
+        "at": "2026-10-26T01:43:06.844928+00:00",
+        "fingerprint": "6cea85b9963d54830a16094c60c82b514f12a6b392f3ffdda9e9f1df366edd97",
+        "intent_fingerprint": "561af576d7c2e45bed5f61466994154d002a7e8c0288a01aef48df9fabd1146c"
+      }
+    }
+  ],
+  "decisions": [
+    "旧记录采用可选 protocol v1 扩展；旧命令和旧任务输出兼容；新任务默认按 AGENTS 执行 align/plan"
+  ],
+  "gaps": [
+    "尚未执行 Linux、Python 3.11 或远端 CI；没有真实模型对话评测"
+  ],
+  "next_action": "等待用户验收",
+  "implementation": "completed",
+  "verification": {
+    "status": "passed",
+    "scope": "full",
+    "at": "2026-10-26T01:43:22.707386+00:00",
+    "python": "3.12.14",
+    "platform": "win32",
+    "fingerprint": "6cea85b9963d54830a16094c60c82b514f12a6b392f3ffdda9e9f1df366edd97",
+    "errors": [],
+    "checks": [
+      {
+        "name": "lint",
+        "command": [
+          "python",
+          "-m",
+          "ruff",
+          "check",
+          "src",
+          "tests",
+          "scripts"
+        ],
+        "exit_code": 0,
+        "seconds": 0.3
+      },
+      {
+        "name": "tests",
+        "command": [
+          "python",
+          "scripts/run_tests.py",
+          "--report",
+          ".workflow/tests-_xv_tr7e.json"
+        ],
+        "exit_code": 0,
+        "seconds": 111.69
+      }
+    ],
+    "intent_fingerprint": "561af576d7c2e45bed5f61466994154d002a7e8c0288a01aef48df9fabd1146c",
+    "tests": {
+      "tests_run": 136,
+      "skipped": 2,
+      "cases": [
+        {
+          "id": "test_auth.AuthTests.test_credentials_file_has_owner_only_posix_permissions",
+          "status": "skipped",
+          "reason": "POSIX mode bits only; Windows ACL is not verified"
+        },
+        {
+          "id": "test_knowledge.KnowledgeTests.test_knowledge_file_has_owner_only_posix_permissions",
+          "status": "skipped",
+          "reason": "POSIX mode bits only; Windows ACL is not verified"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_real_cli_round_trip_and_rework",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow.WorkflowTests.test_v1_history_is_readable_and_upgraded_only_when_edited",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.CliTests.test_real_cli_protocol_story_context_check_and_completion",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_asset_update_keeps_history_and_changes_digest",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_bad_assets_and_duplicate_scenarios_do_not_write",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_chinese_search_and_detail_requires_specific_context",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_context_map_and_doctor_reject_bad_references",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_experience_retrieval_filters_stale_rejected_and_superseded",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_experience_supersession_cycle_and_missing_target_rejected",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_lessons_require_evidence_applicability_and_counterexamples",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_private_and_outside_sources_rejected_before_read",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_progressive_context_and_budget_never_truncate_contracts",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_resolved_alias_into_private_directory_is_never_read",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.KnowledgeTests.test_retrieval_ignores_forged_index_and_reports_linked_stale_story",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_alignment_requires_source_and_preserved_scope_without_writing_failure",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_authorization_change_invalidates_intent_evidence",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_changed_criteria_drop_story_links_and_rework_clears_exemption",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_contract_change_during_check_cannot_overwrite_new_request_state",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_correction_requires_rework_then_alignment_and_new_plan",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_draft_story_cannot_become_delivery_contract",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_invalid_protocol_cannot_silently_pass_validation",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_multiple_active_tasks_never_guess_target",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_new_and_analysis_route_without_creating_or_selecting_task",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_pause_continue_cancel_and_retry_have_explicit_sources",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_plan_versions_and_prior_decisions_are_preserved",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_protocol_preflight_blocks_check_before_running_tools",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_question_and_status_preserve_current_task_and_evidence",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_story_link_detects_source_drift_and_changed_revision",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_summary_keeps_current_boundaries_but_omits_event_and_rework_bodies",
+          "status": "passed"
+        },
+        {
+          "id": "test_workflow_protocol.ProtocolTests.test_v1_alignment_is_explicit_and_preserves_original_snapshot",
+          "status": "passed"
+        }
+      ],
+      "case_details": "mapped_and_nonpassing"
+    }
+  },
+  "acceptance_status": "pending",
+  "result": "前两期工作流已落地：请求与授权协议、任务连续性、业务故事线及最小方案、渐进上下文和经验管理。保留 v1/v2 与旧 CLI 兼容，新增 28 项回归；全量 136 项运行，134 通过、2 项 Windows POSIX 跳过。doctor、Ruff、uv sync --locked、uv lock --check、构建与公开 diff 自审通过。按此前授权再次仅取消 6 个运行文件的 Git 跟踪，本地文件全部保留。未执行 Linux/Python 3.11、远端 CI 或真实模型对话评测；不提交推送。",
+  "updated_at": "2026-10-26T01:45:49.767388+00:00",
+  "baseline": "f780d622e35c90133d10d9d28ea9f09f2587345774a97209012b830be88a45c1",
+  "protocol": {
+    "version": 1,
+    "state": "active",
+    "events": [
+      {
+        "id": "event-1",
+        "kind": "align",
+        "message": "核对授权边界；实现细节在已授权范围内自主选择",
+        "source": "用户明确要求实施前两期并做好兼容和验证",
+        "at": "2026-10-26T01:27:11.495114+00:00",
+        "previous": null,
+        "current": {
+          "source": "用户明确要求实施前两期并做好兼容和验证",
+          "allowed": [
+            "工作流脚本、开发规范、任务协议、故事线与经验目录、相关测试"
+          ],
+          "preserved": [
+            "业务源码与默认权限、真实私有数据、旧记录和原命令兼容；不提交推送"
+          ],
+          "status": "recorded",
+          "revision": 1
+        }
+      },
+      {
+        "id": "event-2",
+        "kind": "exempt",
+        "message": "工作流基础设施任务；不改变业务运行行为。初始业务故事线仅按现有源码与测试描述，新增机制通过临时仓库场景验证。",
+        "source": "本任务不影响业务故事线",
+        "at": "2026-10-26T01:27:11.498209+00:00",
+        "previous": []
+      },
+      {
+        "id": "event-3",
+        "kind": "plan",
+        "message": "新增可选 protocol v1 扩展和两个标准库模块，保留旧接口；引入版本化故事线/经验和按需上下文命令",
+        "source": "根据当前授权制定的实现方案；不构成新增授权",
+        "at": "2026-10-26T01:27:11.501945+00:00",
+        "previous": null,
+        "current": {
+          "reuse": "复用 v1/v2 任务、rework 历史、AC 映射、输入与契约指纹及 unittest 运行器",
+          "changes": "新增可选 protocol v1 扩展和两个标准库模块，保留旧接口；引入版本化故事线/经验和按需上下文命令",
+          "preserve": "业务实现、用户授权边界、旧记录默认输出与未迁移任务验证行为",
+          "steps": [
+            "实现请求路由和生命周期，验证授权变化使证据失效",
+            "实现故事线和最小方案，验证来源/版本变化与关联失效",
+            "实现上下文检索、经验替代与路径边界，补业务现状种子",
+            "更新入口和命令文档，执行新旧 CLI 回归及全量检查"
+          ],
+          "verification": "临时 Git 仓库中的状态/路径/版本测试与真实 CLI 回合；全量 check、锁检查、构建和 diff 自审",
+          "rollback": "新增扩展可停止采用，旧 v1/v2 保持可读；已有协议任务保留历史，按来源修订，禁止删除记录或重置基线掩盖失败",
+          "revision": 1,
+          "authorization_revision": 1
+        }
+      }
+    ],
+    "pending": [],
+    "stories": [],
+    "story_exemption": "工作流基础设施任务；不改变业务运行行为。初始业务故事线仅按现有源码与测试描述，新增机制通过临时仓库场景验证。",
+    "plan": {
+      "reuse": "复用 v1/v2 任务、rework 历史、AC 映射、输入与契约指纹及 unittest 运行器",
+      "changes": "新增可选 protocol v1 扩展和两个标准库模块，保留旧接口；引入版本化故事线/经验和按需上下文命令",
+      "preserve": "业务实现、用户授权边界、旧记录默认输出与未迁移任务验证行为",
+      "steps": [
+        "实现请求路由和生命周期，验证授权变化使证据失效",
+        "实现故事线和最小方案，验证来源/版本变化与关联失效",
+        "实现上下文检索、经验替代与路径边界，补业务现状种子",
+        "更新入口和命令文档，执行新旧 CLI 回归及全量检查"
+      ],
+      "verification": "临时 Git 仓库中的状态/路径/版本测试与真实 CLI 回合；全量 check、锁检查、构建和 diff 自审",
+      "rollback": "新增扩展可停止采用，旧 v1/v2 保持可读；已有协议任务保留历史，按来源修订，禁止删除记录或重置基线掩盖失败",
+      "revision": 1,
+      "authorization_revision": 1
+    },
+    "authorization": {
+      "source": "用户明确要求实施前两期并做好兼容和验证",
+      "allowed": [
+        "工作流脚本、开发规范、任务协议、故事线与经验目录、相关测试"
+      ],
+      "preserved": [
+        "业务源码与默认权限、真实私有数据、旧记录和原命令兼容；不提交推送"
+      ],
+      "status": "recorded",
+      "revision": 1
+    }
+  }
+}

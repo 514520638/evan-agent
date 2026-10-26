@@ -150,7 +150,17 @@ activemq-data/
 *.sage.py
 
 # Environments
+.env
+.env.*
 !.env.example
+.local/
+.workflow/
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-*
+*.sqlite3-*
+*.db-*
 .envrc
 .venv
 venv/

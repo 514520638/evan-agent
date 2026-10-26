@@ -1,0 +1,85 @@
+{
+  "id": "streaming-history",
+  "title": "流式显示、完整结果与聊天历史提交",
+  "source": "2026-10-26 对 sessions.py、test_streaming.py 和失败历史测试的核对",
+  "status": "observed",
+  "tags": [
+    "流式",
+    "历史",
+    "失败",
+    "streaming",
+    "sessions"
+  ],
+  "sources": [
+    {
+      "path": "src/evan_agent/sessions.py",
+      "sha256": "1ef02d409b6c11cd0abdb424b7b3af706f70774a133132672f307b50aa8059f6"
+    },
+    {
+      "path": "tests/test_streaming.py",
+      "sha256": "8ce75ac1704d32669edb2a07ef664c10e32b2a16d86098b60474924c97ec8429"
+    },
+    {
+      "path": "tests/test_sessions.py",
+      "sha256": "165bd1b4564789c6d537aec88a9e29aef8057307ca341bca5a9a3ff9c2039116"
+    }
+  ],
+  "actors": [
+    "聊天用户",
+    "模型流",
+    "文本回调"
+  ],
+  "preconditions": [
+    "当前身份拥有聊天",
+    "调用流式消息链路"
+  ],
+  "invariants": [
+    "显示部分文本不等于提交完整历史",
+    "模型失败不会破坏此前成功历史",
+    "流式显示、聊天提交与长期写入是不同事实"
+  ],
+  "scenarios": [
+    {
+      "id": "success",
+      "title": "完整成功后提交历史",
+      "given": "有效聊天开始请求",
+      "when": "逐段收到文本并完成",
+      "then": "文本回调先于历史提交，完整结果返回后历史包含本轮问答",
+      "from": "streaming",
+      "to": "committed",
+      "tests": [
+        "test_streaming.StreamingTests.test_tokens_arrive_before_history_commit"
+      ]
+    },
+    {
+      "id": "partial-failure",
+      "title": "部分输出后失败",
+      "given": "流已显示部分文本",
+      "when": "后续模型流抛错",
+      "then": "保留已显示事实，本轮不提交历史；既有成功历史不被失败模型修改",
+      "from": "streaming",
+      "to": "failed",
+      "tests": [
+        "test_streaming.StreamingTests.test_partial_failure_does_not_commit_history",
+        "test_sessions.SessionTests.test_failed_model_does_not_commit_or_mutate_history"
+      ]
+    },
+    {
+      "id": "review-resume",
+      "title": "人工审批后继续流式输出",
+      "given": "模型请求长期写入审批",
+      "when": "用户确认后恢复",
+      "then": "审批前不写入，恢复后写入并继续显示最终文本，不向显示回调暴露 thinking 块",
+      "from": "pending-review",
+      "to": "committed",
+      "tests": [
+        "test_streaming.StreamingTests.test_stream_resumes_after_hitl_and_hides_thinking"
+      ]
+    }
+  ],
+  "version": 1,
+  "kind": "story",
+  "revision": 1,
+  "history": [],
+  "updated_at": "2026-10-26T01:37:17.768941+00:00"
+}

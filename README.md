@@ -2,6 +2,9 @@
 
 基于 Python、LangChain 和 MiniMax 的 AI Agent 起步项目，提供命令行多轮对话入口。
 
+开发与 AI 协作从 [AGENTS.md](AGENTS.md) 开始，具体流程见 [开发工作流](docs/DEVELOPMENT.md)。
+安装依赖后用 `uv run python scripts/check.py` 运行本地与 CI 共用的静态检查及离线测试。
+
 ## 环境要求
 
 - Python 3.11 或更高版本
