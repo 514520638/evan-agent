@@ -10,6 +10,7 @@ from evan_agent.knowledge import KnowledgeStore
 from evan_agent.knowledge_tools import build_knowledge_tools
 from evan_agent.middleware import build_middleware
 from evan_agent.sessions import SessionStore, SessionBusyError
+from evan_agent.conversation_db import DEFAULT_SESSION_DB
 
 
 def build_agent(knowledge, sessions):
@@ -30,7 +31,7 @@ class AgentService:
     def __init__(self, auth=None, knowledge=None, sessions=None, agent_factory=build_agent):
         self.auth = auth if auth is not None else AuthStore()
         self.knowledge = knowledge if knowledge is not None else KnowledgeStore()
-        self.sessions = sessions if sessions is not None else SessionStore()
+        self.sessions = sessions if sessions is not None else SessionStore(DEFAULT_SESSION_DB)
         self._factory = agent_factory
         self._agent = None
         from threading import Lock

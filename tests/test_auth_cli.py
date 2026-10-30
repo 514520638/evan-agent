@@ -12,6 +12,7 @@ from langchain_core.language_models.fake_chat_models import FakeMessagesListChat
 from langchain_core.messages import AIMessage
 
 from evan_agent.auth import AuthStore
+from evan_agent.sessions import SessionStore
 from evan_agent.main import main
 from evan_agent.middleware import AuditWriter, build_middleware
 from evan_agent.knowledge import KnowledgeStore
@@ -49,6 +50,7 @@ class CliAuthTests(unittest.TestCase):
                 patch("evan_agent.main.load_dotenv"),
                 patch.dict("os.environ", {"MINIMAX_API_KEY": "fake-local-only", "MINIMAX_BASE_URL": "https://example.invalid"}, clear=True),
                 patch("evan_agent.main.AuthStore", return_value=store),
+                patch("evan_agent.main.SessionStore", return_value=SessionStore()),
                 patch("evan_agent.main.KnowledgeStore", return_value=KnowledgeStore(Path(directory) / "knowledge.sqlite3")),
                 patch("evan_agent.main.read_password", return_value="test-only-password-2026"),
                 patch("evan_agent.service.ChatAnthropic", return_value=model),

@@ -178,6 +178,13 @@ class KnowledgeStore:
             raise EntryNotFoundError("未找到当前身份可查询的已发布资料。")
         return ProfileEntry(**dict(row))
 
+    def _invalidate_vectors(self, entry_id):
+        """资料变更时清理该资料的旧向量；下次检索增量构建新版本。"""
+        path = self.path.with_name(self.path.stem + '.vectors.sqlite3')
+        if path.exists():
+            with closing(sqlite3.connect(path, timeout=10)) as index, index:
+                index.execute('DELETE FROM vectors WHERE entry_id=?', (entry_id,))
+
     def update(self, identity: AuthContext, entry_id: str, **changes) -> ProfileEntry:
         """只更新允许编辑的字段，保持 ID、归属和创建时间不变。"""
         allowed = {"content", "category", "source", "visibility", "status"}
@@ -195,6 +202,7 @@ class KnowledgeStore:
             if not cursor.rowcount:
                 raise EntryNotFoundError("资料不存在或当前身份无权修改。")
             row = db.execute("SELECT * FROM profile_entries WHERE id = ? AND owner_id = ?", (entry_id, owner_id)).fetchone()
+            self._invalidate_vectors(entry_id)
             return ProfileEntry(**dict(row))
 
     def delete(self, identity: AuthContext, entry_id: str) -> None:
@@ -205,6 +213,7 @@ class KnowledgeStore:
             cursor = db.execute("DELETE FROM profile_entries WHERE id = ? AND owner_id = ?", (entry_id, owner_id))
             if not cursor.rowcount:
                 raise EntryNotFoundError("资料不存在或当前身份无权删除。")
+            self._invalidate_vectors(entry_id)
 
 
 def main():

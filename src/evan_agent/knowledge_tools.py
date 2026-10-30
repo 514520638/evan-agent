@@ -5,45 +5,56 @@
 """
 
 import sqlite3
+import json
+from langchain_core.messages import ToolMessage
 from typing import Literal
 
 from langchain.tools import ToolRuntime, tool
 
 from evan_agent.auth import AuthContext, require_owner
 from evan_agent.knowledge import EntryNotFoundError, KnowledgeStore
+from evan_agent.retrieval import Retriever
 
+
+
+def write_result(entry, status, runtime, name):
+    """工具结果携带服务端写入回执；artifact 不作为模型生成文字的依据。"""
+    receipt = {"status": status, "id": entry.id, "visibility": entry.visibility,
+               "publication_status": entry.status}
+    return ToolMessage(content=json.dumps({**receipt, "content": entry.content}, ensure_ascii=False),
+                       tool_call_id=runtime.tool_call_id, name=name,
+                       artifact={"memory_write": receipt})
 
 
 def build_knowledge_tools(store: KnowledgeStore):
     """闭包绑定存储对象，不把数据库路径或身份字段交给模型填写。"""
+
+    retriever = Retriever(store)
 
     @tool
     def search_personal_knowledge(query: str, runtime: ToolRuntime[AuthContext],
                                   limit: int = 5, offset: int = 0) -> dict:
         """检索主人已发布的个人资料，返回带来源 ID 的片段。
 
-        query 为最多 8 个空格分隔的简短关键词，匹配原文或分类的任一词。
+        query 支持自然语言问题或简短关键词；配置 Embedding 时使用混合检索与 MMR 重排。
         空 query 分页浏览可见资料。limit 为 1–10，offset 为结果偏移量。
         无匹配时尝试相关关键词；不要把用户的整句问题直接当作唯一关键词。
         """
         try:
             if type(limit) is not int or not 1 <= limit <= 10:
                 raise ValueError("limit 须为 1–10。")
-            entries = store.search(runtime.context, query, limit=limit + 1, offset=offset)
+            entries, retrieval = retriever.search(runtime.context, query, limit=limit, offset=offset)
             results = []
-            for entry in entries[:limit]:
-                # 将片段放在首个命中词附近，避免命中资料尾部却只返回无关开头。
-                positions = [entry.content.lower().find(term.lower()) for term in query.split()]
-                positions = [position for position in positions if position >= 0]
-                start = max(0, min(positions) - 100) if positions else 0
-                end = min(len(entry.content), start + 1600)
+            for entry, chunk in entries[:limit]:
+                start = chunk.start if chunk else 0
+                end = chunk.end if chunk else min(len(entry.content),1600)
                 results.append({"id": entry.id, "citation": f"[资料:{entry.id}]",
                                 "category": entry.category, "source": entry.source,
                                 "updated_at": entry.updated_at, "content": entry.content[start:end],
-                                "excerpt_start": start, "excerpt_end": end,
+                                "chunk_id": chunk.id if chunk else None, "excerpt_start": start, "excerpt_end": end,
                                 "truncated": start > 0 or end < len(entry.content)})
-            print(f"\n[知识查询] 本次返回 {len(results)} 条可见的已发布资料。")
-            return {"status": "ok", "results": results,
+            print(f"\n[知识查询] {retrieval['mode']} / {retrieval['reranker']}，返回 {len(results)} 条已发布资料。")
+            return {"status": "ok", "results": results, "retrieval": retrieval,
                     "next_offset": offset + limit if len(entries) > limit else None}
         except ValueError as error:
             return {"status": "invalid_query", "message": str(error)}
@@ -89,8 +100,7 @@ def build_knowledge_tools(store: KnowledgeStore):
             require_owner(runtime.context)
             entry = store.create(runtime.context, content=content, category=category,
                                  source="conversation", visibility=visibility, status=status)
-            return {"status": "saved", "id": entry.id, "visibility": entry.visibility,
-                    "publication_status": entry.status, "content": entry.content}
+            return write_result(entry, "saved", runtime, "save_personal_memory")
         except PermissionError:
             return {"status": "denied", "message": "只有本人登录后才能写入长期记忆，未保存。"}
         except ValueError as error:
@@ -116,8 +126,7 @@ def build_knowledge_tools(store: KnowledgeStore):
             if status is not None:
                 changes["status"] = status
             entry = store.update(runtime.context, entry_id, **changes)
-            return {"status": "updated", "id": entry.id, "visibility": entry.visibility,
-                    "publication_status": entry.status, "content": entry.content}
+            return write_result(entry, "updated", runtime, "update_personal_memory")
         except PermissionError:
             return {"status": "denied", "message": "只有本人登录后才能更新长期记忆，未修改。"}
         except EntryNotFoundError:

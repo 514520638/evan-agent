@@ -1,10 +1,12 @@
 """本地 FastAPI 接口：Cookie 认证、SSE 聊天与跨请求人工审批。
 
-默认监听 127.0.0.1:8001。当前会话和 checkpoint 为单进程内存，不能启用多个 worker。
+默认监听 127.0.0.1:8001。当前会话和 checkpoint 使用 SQLite，仍为单进程，不能启用多个 worker。
 """
 
 from dataclasses import asdict
+from contextlib import asynccontextmanager
 import json
+import asyncio
 import os
 from threading import BoundedSemaphore
 from typing import Literal
@@ -49,6 +51,7 @@ class ReviewBody(BaseModel):
 
 def create_app(service=None):
     load_dotenv('.env')
+    managed_service = service is None
     service = service if service is not None else AgentService()
     sessions = WebSessions(service.sessions)
     limits = RequestLimits()
@@ -58,10 +61,18 @@ def create_app(service=None):
     if '*' in origins:
         raise ValueError('凭据接口不能使用通配 CORS 来源。')
     secure = os.getenv('AGENT_COOKIE_SECURE', 'false').lower() == 'true'
-    app = FastAPI(title='Evan Agent API', version='0.1.0', docs_url=PREFIX + '/docs', openapi_url=PREFIX + '/openapi.json')
+    @asynccontextmanager
+    async def lifespan(app):
+        try:
+            yield
+        finally:
+            if managed_service:
+                service.sessions.close()
+
+    app = FastAPI(lifespan=lifespan, title='Evan Agent API', version='0.1.0', docs_url=PREFIX + '/docs', openapi_url=PREFIX + '/openapi.json')
     app.state.service = service
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
-                       allow_methods=['GET', 'POST', 'DELETE'], allow_headers=['Content-Type', 'X-Agent-Request'])
+                       allow_methods=['GET', 'POST', 'PATCH', 'DELETE'], allow_headers=['Content-Type', 'X-Agent-Request'])
 
     @app.middleware('http')
     async def request_boundary(request, call_next):
@@ -161,7 +172,8 @@ def create_app(service=None):
         return {'conversation_id': conversation_id,
                 'messages': [{'role': 'user' if m.type == 'human' else 'assistant', 'content': m.text}
                              for m in history if m.type in ('human', 'ai') and m.text],
-                'pending': service.sessions.pending_for(user, conversation_id)}
+                'pending': service.sessions.pending_for(user, conversation_id),
+                **service.sessions.operation_for(user, conversation_id)}
 
     @app.delete(PREFIX + '/conversations/{conversation_id}/messages')
     def clear(conversation_id: str, request: Request):
@@ -181,13 +193,24 @@ def create_app(service=None):
                 yield encode({'type': 'error', 'code': 'busy', 'message': '当前请求较多，请稍后再试。'})
                 return
             iterator = service.sessions.events(agent, user, conversation_id, **kwargs)
+            advancing = None
             sentinel = object()
             def advance():
                 sessions.require(token)
                 return next(iterator, sentinel)
             try:
                 while not await request.is_disconnected():
-                    event = await anyio.to_thread.run_sync(advance)
+                    advancing = asyncio.create_task(anyio.to_thread.run_sync(advance))
+                    while not advancing.done():
+                        done, _ = await asyncio.wait({advancing}, timeout=15)
+                        if not done:
+                            sessions.require(token)
+                            if await request.is_disconnected():
+                                return
+                            # SSE 注释保活，不会被前端当成模型文本。
+                            yield ': heartbeat\n\n'
+                    event = advancing.result()
+                    advancing = None
                     if event is sentinel:
                         break
                     sessions.require(token)
@@ -199,6 +222,11 @@ def create_app(service=None):
             finally:
                 # 断流时关闭生成器，释放 busy 标记与非审批 checkpoint。
                 with anyio.CancelScope(shield=True):
+                    if advancing is not None:
+                        try:
+                            await advancing
+                        except Exception:
+                            pass
                     await anyio.to_thread.run_sync(iterator.close)
                 capacity.release()
         return StreamingResponse(generate(), media_type='text/event-stream',
@@ -219,6 +247,14 @@ def create_app(service=None):
         decision = service.prepare_review(user, conversation_id, approval_id,
                                           [item.model_dump() for item in body.decisions])
         return stream(request, user, conversation_id, approval_id=approval_id, decision=decision)
+
+    @app.patch(PREFIX + '/conversations/{conversation_id}/approvals/{approval_id}/draft')
+    def review_draft(conversation_id: str, approval_id: str, body: ReviewBody, request: Request):
+        user = identity(request)
+        decisions = [item.model_dump() for item in body.decisions]
+        service.prepare_review(user, conversation_id, approval_id, decisions)
+        service.sessions.save_review_draft(user, conversation_id, approval_id, decisions)
+        return {'status': 'draft_saved'}
 
     @app.delete(PREFIX + '/conversations/{conversation_id}/approvals/{approval_id}')
     def cancel(conversation_id: str, approval_id: str, request: Request):

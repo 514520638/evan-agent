@@ -28,14 +28,14 @@ API 监听 `http://127.0.0.1:8001`，接口说明在 `/agent-api/docs`。
 - Cookie 为 HttpOnly、SameSite=Lax，路径 `/agent-api`；本地默认 Secure=false。
 - HTTPS 部署时设置 `AGENT_COOKIE_SECURE=true`。优先采用博客同源路径代理；
   不同站点的跨站 Cookie 方案未在本版支持。
-- 会话由服务端签发随机令牌，内存只存令牌哈希，不接受前端自行提交 owner_id/role。
+- 会话由服务端签发随机令牌，持久化保存令牌哈希，不接受前端自行提交 owner_id/role。
 - 本人有效期 30 分钟，访客 1 小时。登录成功轮换 Cookie；旧身份聊天及审批清理。
 - 退出登录会撤销服务端身份，旧 Cookie 不能恢复访问。不存在公开注册主人接口。
 - 博客已有管理员登录与 Agent 本人认证是两套独立认证，不自动共享权限。
 - 登录失败返回 401；认证存储沿用现有五次失败锁定规则。
 
-当前所有会话、历史、待审批 checkpoint 保存在内存；只能单 worker 运行。
-重启后浏览器须重新建立会话，未确认写入不会自动执行；长期资料 SQLite 不受影响。
+当前所有会话、历史、待审批 checkpoint 使用本地 SQLite；只能单 worker 运行。
+未过期 Cookie 在重启后有效；过期需重新登录，本人历史仍可恢复。未确认写入不自动执行。
 
 ## 接口清单
 
@@ -156,3 +156,9 @@ location /agent-api/ {
     proxy_read_timeout 180s;
 }
 ```
+
+## 完整流程与断线核对
+
+已增加审批草稿暂存、写入回执和执行状态查询，详见 [完整验收说明](ACCEPTANCE.md)。
+前端会在停止接收或流式失败后只读核对服务端状态，不自动重复提交写入。
+域名 Nginx 路径示例见 `deploy/nginx-agent.location.conf`。

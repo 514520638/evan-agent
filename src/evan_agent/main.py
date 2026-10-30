@@ -8,6 +8,7 @@ from anthropic import APIError
 
 from evan_agent.auth import AuthContext, AuthenticationError, AuthStore, read_password
 from evan_agent.sessions import SessionStore
+from evan_agent.conversation_db import DEFAULT_SESSION_DB
 from evan_agent.knowledge import KnowledgeStore
 from evan_agent.profile_commands import ProfileCommands
 from evan_agent.service import AgentService
@@ -43,7 +44,7 @@ def describe_api_error(error: APIError, api_key: str) -> str:
 
 
 def main() -> None:
-    """启动交互式聊天；对话历史保存在内存中，程序退出后清空。"""
+    """启动交互式聊天；本人历史和待审批资料使用本地 SQLite 保存。"""
     # 从启动命令所在目录读取 .env，因此应在项目根目录启动。
     # load_dotenv 默认不覆盖终端中已导出的同名环境变量。
     # .env 中的 NO_PROXY 也在此加载，让指定 MiniMax 域名绕过本机代理。
@@ -52,7 +53,7 @@ def main() -> None:
     knowledge = KnowledgeStore()
     profiles = ProfileCommands(knowledge)
     identity = AuthContext.guest()
-    sessions = SessionStore()
+    sessions = SessionStore(DEFAULT_SESSION_DB)
     conversation_id = sessions.create(identity)
     api_key = os.getenv("MINIMAX_API_KEY", "").strip()
     # api_key鉴空。
@@ -80,7 +81,7 @@ def main() -> None:
                 sessions.discard_identity(identity)
                 identity = AuthContext.guest()
                 conversation_id = sessions.create(identity)
-                print("本人登录已过期，已切换为访客并清空当前上下文。")
+                print("本人登录已过期，已切换为访客，历史保留供本人重登查看。")
             if prompt.lower() in {"exit", "quit"}:
                 break
             if not prompt:
@@ -104,7 +105,7 @@ def main() -> None:
                 sessions.discard_identity(identity)
                 identity = AuthContext.guest()
                 conversation_id = sessions.create(identity)
-                print("已退出登录，切换为访客并清空当前上下文。")
+                print("已退出登录，切换为访客，历史保留供本人重登查看。")
                 continue
             if prompt == "/whoami":
                 print(f"当前身份：{'本人' if identity.is_owner else '访客'}；登录会话：{identity.session_id}；聊天：{conversation_id}")
@@ -136,7 +137,7 @@ def main() -> None:
                     print(f"已切换到聊天：{conversation_id}")
                 continue
             if prompt == "/help":
-                print("/login：本人登录\n/logout：退出并删除本次身份的全部聊天\n/whoami：查看身份\n/new：新建聊天\n/sessions：列出当前身份的聊天\n/switch ID：切换聊天\n/clear：清空当前聊天\n/profile help：个人资料管理\nexit 或 quit：退出程序")
+                print("/login：本人登录\n/logout：退出登录（本人历史保留）\n/whoami：查看身份\n/new：新建聊天\n/sessions：列出当前身份的聊天\n/switch ID：切换聊天\n/clear：清空当前聊天\n/profile help：个人资料管理\nexit 或 quit：退出程序")
                 continue
             if prompt.startswith("/"):
                 print("未知命令。请使用 /help；/login 后不要附加密码。")
@@ -173,6 +174,7 @@ def main() -> None:
         pass
     finally:
         # 无论通过退出命令还是终端中断结束，都显示告别提示。
+        sessions.close()
         print("\n再见！")
 
 

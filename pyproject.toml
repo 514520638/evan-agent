@@ -11,6 +11,7 @@ dependencies = [
     "prompt-toolkit>=3.0.52,<4.0",
     "fastapi>=0.115,<1.0",
     "uvicorn>=0.30,<1.0",
+    "langgraph-checkpoint-sqlite>=3.0,<4.0",
 ]
 
 [project.scripts]
@@ -18,6 +19,7 @@ evan-agent = "evan_agent.main:main"
 evan-auth = "evan_agent.auth:main"
 evan-knowledge = "evan_agent.knowledge:main"
 evan-api = "evan_agent.api:main"
+evan-rag = "evan_agent.retrieval:main"
 
 [build-system]
 requires = ["hatchling"]
