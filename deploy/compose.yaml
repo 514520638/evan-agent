@@ -1,0 +1,36 @@
+name: evan-agent
+services:
+  agent:
+    # 每次发布使用独立标签，保留上一版镜像以便回滚。
+    image: ${AGENT_IMAGE:?Set AGENT_IMAGE to a versioned image}
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:8001:8001"
+    env_file:
+      - /opt/evan-agent/shared/agent.env
+    volumes:
+      - /opt/evan-agent/shared/data:/app/.local:Z
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    # 2GB 共享服务器试运行预算；不是进程预留量，也不保证宿主机不会 OOM。
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    stop_grace_period: 150s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/agent-api/health', timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 30s
