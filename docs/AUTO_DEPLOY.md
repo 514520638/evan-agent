@@ -41,15 +41,30 @@ Java 容器继续使用现有环境变量、网络和配置，不向 GitHub 添�
 
 ## Agent 流程
 
-工作流 .github/workflows/deploy.yml：Python 3.12 → uv 0.9.25 → 锁定依赖 → unittest →
-SSH 配置与连接预检 → amd64 Docker 镜像（标签为完整 commit SHA）→ gzip 压缩 → SSH 上传 → deploy/ci-deploy.sh。
-镜像在 GitHub runner 构建，服务器只加载压缩镜像，不在 2GB 服务器编译或安装本地 Embedding 模型。
-上传和部署是独立步骤，上传最多 32 分钟，部署最多 20 分钟。SSH 连接有 15 秒超时和保活检测。
-部署脚本验证配置、备份 .env 和 Compose、停止 Agent、冷备份数据、切换版本并检查健康。
-失败时恢复旧镜像和 Compose，保存故障数据以供排查，不自动覆盖当前数据为旧快照。
-未来若有不兼容数据库迁移，必须为该迁移设计单独的恢复步骤。
-服务存在短暂停机。资料和聊天不从开发电脑重新上传，生产数据目录持续使用。
-健康检查只覆盖服务存活与代理可达，模型供应商可用性及审批等仍需要业务验收。
+测试 → Buildx 构建 linux/amd64 → 使用 GITHUB_TOKEN 推送 ghcr.io/514520638/evan-agent →
+上传 Compose、部署脚本和 image-ref.txt → 服务器按 sha256 摘要 docker pull → 备份、更新、健康检查。
+不再通过 SSH 上传整份镜像。镜像保持默认私有，不自动修改可见性。
+Dockerfile 在复制业务代码前安装依赖，uv.lock 不变时复用依赖层；GitHub 使用 gha 构建缓存。
+首次发布、依赖变更和基础镜像更新仍可能下载较多数据，不保证固定耗时。
+镜像拉取最多 20 分钟，成功后才获取发布锁与停止 Agent。失败保留当前服务。
+上线前备份 Compose、镜像引用及数据，失败恢复旧镜像；数据库不自动还原旧快照。
+
+### 首次配置服务器的镜像读取权限
+
+GitHub 个人 Settings → Developer settings → Personal access tokens → Tokens (classic)，创建具有 read:packages 权限的令牌。
+令牌所属账号需要有本仓库镜像的读取权限；设置合适有效期，到期后需要重新登录。
+不要把令牌提交到仓库或发到聊天里。以 root 登录服务器后执行：
+
+```bash
+read -rsp 'GHCR read token: ' GHCR_READ_TOKEN
+printf '\n'
+printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io -u 514520638 --password-stdin
+unset GHCR_READ_TOKEN
+```
+
+凭据由服务器 root 的 Docker 配置保存。Actions 推送使用自动提供的 GITHUB_TOKEN，无需新增推送密码 Secret。
+首次镜像由本仓库工作流创建，以获得仓库对应的包权限；如果同名包已存在，需在包设置中授予本仓库 Actions 访问权限。
+配置登录后提交合并工作流即可。当前仅验证 GHCR 接口连通，尚未推送或部署新镜像。
 
 ## 前端流程
 
@@ -81,8 +96,7 @@ MySQL 容器、数据目录、Agent 和前端不随 Java 发布重启。Java 服
 | Connection timed out | 检查安全组、22 端口或上传链路；不关闭主机身份验证 |
 | Waiting for server release lock | 另一个仓库正在部署，等待完成；超出 10 分钟会失败 |
 
-原 Upload and deploy 一直运行，可能只是上传未压缩镜像；它不代表服务已被停止。
-新流程打印压缩包大小，scp 输出连接与传输诊断，之后独立显示 Deploy and verify。
+旧 Upload and deploy 可能停留在镜像包传输。Agent 现改为仓库拉取；前端与 Java 继续使用 rsync 上传。
 确认旧任务仍在上传且要替换为新流程时，在 Actions 的运行详情中 Cancel workflow。
 修正 Secret 后可以重跑相同提交；若修改了工作流或脚本，必须提交并合并新版本，重跑旧任务仍会使用旧提交。
 

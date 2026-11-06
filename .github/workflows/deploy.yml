@@ -26,6 +26,9 @@ jobs:
   deploy:
     if: github.event_name == 'push'
     needs: test
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
@@ -47,13 +50,32 @@ jobs:
           ssh-keygen -F "$HOST" -f ~/.ssh/known_hosts > /dev/null || { echo 'DEPLOY_KNOWN_HOSTS must contain the verified server key for 62.234.72.18'; exit 1; }
           printf '%s\n' 'Host *' '  ConnectTimeout 15' '  ConnectionAttempts 1' '  ServerAliveInterval 15' '  ServerAliveCountMax 4' '  IdentitiesOnly yes' > ~/.ssh/config
           timeout 30s ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes "root@$HOST" 'echo SSH_READY'
-      - name: Build amd64 production image
-        timeout-minutes: 20
-        run: |
-          docker build --platform linux/amd64 -t "evan-agent:$GITHUB_SHA" .
-          docker save "evan-agent:$GITHUB_SHA" | gzip -6 > agent.tar.gz
-          ls -lh agent.tar.gz
-      - name: Upload compressed release
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Pin release digest
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: printf '%s@%s\n' "$IMAGE_NAME" "$IMAGE_DIGEST" > image-ref.txt
+      - name: Upload deployment files
         id: upload
         timeout-minutes: 32
         run: |
@@ -61,11 +83,11 @@ jobs:
           if [ "$head" != "$GITHUB_SHA" ]; then echo 'Newer commit exists; skipping stale deployment.'; exit 0; fi
           remote="/tmp/evan-agent-ci-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes "root@$HOST" "mkdir -m 700 '$remote'"
-          bash deploy/ci-upload.sh "$remote" agent.tar.gz deploy/compose.yaml deploy/ci-deploy.sh
+          bash deploy/ci-upload.sh "$remote" image-ref.txt deploy/compose.yaml deploy/ci-deploy.sh
           echo 'ready=true' >> "$GITHUB_OUTPUT"
       - name: Deploy and verify
         if: steps.upload.outputs.ready == 'true'
-        timeout-minutes: 20
+        timeout-minutes: 40
         run: |
           remote="/tmp/evan-agent-ci-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes "root@$HOST" "bash '$remote/ci-deploy.sh' '$remote' '$GITHUB_SHA' '$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'"
