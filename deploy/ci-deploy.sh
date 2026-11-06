@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# GitHub 构建产物部署入口。只更新 Agent，保留生产凭据和持久化数据。
+# [POS] Agent 构建产物部署入口，保留生产凭据和持久化数据。
+# [INPUT] .github/workflows/deploy.yml (POS: Agent 验证、镜像构建与传输流程)
+#         compose.yaml (POS: Agent 生产容器运行配置)
+# [OUTPUT] 加载压缩镜像、备份数据、切换版本并验证，失败恢复旧版本。
 set -Eeuo pipefail
 incoming=${1:?Incoming directory required}
 sha=${2:?Commit SHA required}
@@ -7,7 +10,9 @@ run=${3:?Run identifier required}
 [[ "$sha" =~ ^[a-f0-9]{40}$ && "$run" =~ ^[0-9]+-[0-9]+$ ]]
 [[ "$incoming" == "/tmp/evan-agent-ci-$sha-$run" ]]
 exec 9>/var/lock/evanlink-release.lock
+echo "Waiting for server release lock (up to 10 minutes)"
 flock -w 600 9
+echo "Release lock acquired"
 cd /opt/evan-agent
 umask 077
 backup="backups/ci-$sha-$run"
@@ -16,7 +21,7 @@ cp -p .env "$backup/image.env"
 cp -p compose.yaml "$backup/compose.yaml"
 test -f shared/agent.env
 test -d shared/data
-docker load -i "$incoming/agent.tar"
+docker load -i "$incoming/agent.tar.gz"
 image="evan-agent:$sha"
 docker image inspect "$image" >/dev/null
 # 配置语法检查先于停机，避免失败部署中断服务。
@@ -53,4 +58,4 @@ test "$ready" -eq 1
 curl -fsS --max-time 15 https://evanlink.cn/agent-api/health
 docker compose ps
 echo "Agent deployed: $sha"
-rm -- "$incoming/agent.tar"
+rm -- "$incoming/agent.tar.gz"

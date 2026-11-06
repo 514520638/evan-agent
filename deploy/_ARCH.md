@@ -7,6 +7,9 @@
 | compose.yaml | 单 worker 容器、回环端口、持久化目录、资源与日志上限 |
 | agent.env.example | 生产配置模板，不含真实凭据 |
 | nginx-agent.location.conf | 宿主机 Nginx HTTPS server 的新增路由 |
+| ci-deploy.sh | 接收 gzip 镜像，等待共享发布锁，备份并切换容器，失败恢复旧版本 |
 
 依赖：evan_agent.api（聊天、认证、资料管理 HTTP 入口），.local（认证、会话、checkpoint、知识原文及缓存持久化）。
 完整上线与回滚步骤见 [DEPLOYMENT.md](../docs/DEPLOYMENT.md)。
+CI 的主机校验、超时、三仓库 Secrets 与启用步骤见 [AUTO_DEPLOY.md](../docs/AUTO_DEPLOY.md)。
+CI 输入来自 .github/workflows/deploy.yml（Agent 验证、镜像构建与传输流程）。

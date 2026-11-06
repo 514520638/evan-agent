@@ -6,6 +6,9 @@ on:
     branches: [main, master]
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
 concurrency:
   group: agent-${{ github.event_name }}-${{ github.event_name == 'push' && 'production' || github.ref }}
   cancel-in-progress: false
@@ -24,29 +27,45 @@ jobs:
     if: github.event_name == 'push'
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
       HOST: 62.234.72.18
     steps:
       - uses: actions/checkout@v4
-      - name: Build amd64 production image
-        run: |
-          docker build --platform linux/amd64 -t "evan-agent:$GITHUB_SHA" .
-          docker save -o agent.tar "evan-agent:$GITHUB_SHA"
       - name: Configure deployment SSH
+        timeout-minutes: 2
         run: |
-          test -n "$SSH_PRIVATE_KEY" && test -n "$SSH_KNOWN_HOSTS"
+          test -n "$SSH_PRIVATE_KEY" || { echo 'Missing DEPLOY_SSH_KEY repository secret'; exit 1; }
+          test -n "$SSH_KNOWN_HOSTS" || { echo 'Missing DEPLOY_KNOWN_HOSTS repository secret'; exit 1; }
           install -d -m 700 ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy
           printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/deploy ~/.ssh/known_hosts
-      - name: Upload and deploy
+          ssh-keygen -y -P '' -f ~/.ssh/deploy > /dev/null || { echo 'DEPLOY_SSH_KEY must contain an unencrypted OpenSSH private key'; exit 1; }
+          ssh-keygen -F "$HOST" -f ~/.ssh/known_hosts > /dev/null || { echo 'DEPLOY_KNOWN_HOSTS must contain the verified server key for 62.234.72.18'; exit 1; }
+          printf '%s\n' 'Host *' '  ConnectTimeout 15' '  ConnectionAttempts 1' '  ServerAliveInterval 15' '  ServerAliveCountMax 4' '  IdentitiesOnly yes' > ~/.ssh/config
+          timeout 30s ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes "root@$HOST" 'echo SSH_READY'
+      - name: Build amd64 production image
+        timeout-minutes: 20
         run: |
-          head=$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)
+          docker build --platform linux/amd64 -t "evan-agent:$GITHUB_SHA" .
+          docker save "evan-agent:$GITHUB_SHA" | gzip -1 > agent.tar.gz
+          ls -lh agent.tar.gz
+      - name: Upload compressed release
+        id: upload
+        timeout-minutes: 15
+        run: |
+          head=$(timeout 30s git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)
           if [ "$head" != "$GITHUB_SHA" ]; then echo 'Newer commit exists; skipping stale deployment.'; exit 0; fi
           remote="/tmp/evan-agent-ci-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes "root@$HOST" "mkdir -m 700 '$remote'"
-          scp -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes agent.tar deploy/compose.yaml deploy/ci-deploy.sh "root@$HOST:$remote/"
+          timeout 840s scp -v -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes agent.tar.gz deploy/compose.yaml deploy/ci-deploy.sh "root@$HOST:$remote/"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - name: Deploy and verify
+        if: steps.upload.outputs.ready == 'true'
+        timeout-minutes: 20
+        run: |
+          remote="/tmp/evan-agent-ci-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes "root@$HOST" "bash '$remote/ci-deploy.sh' '$remote' '$GITHUB_SHA' '$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'"
