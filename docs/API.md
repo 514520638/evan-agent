@@ -164,6 +164,23 @@ location /agent-api/ {
 域名 Nginx 路径示例见 `deploy/nginx-agent.location.conf`。
 # 知识库管理入口
 
+## 会话图片
+
+`POST /agent-api/conversations/{id}/images` 接收原始 JPEG/PNG/WebP 二进制，要求现有登录 Cookie 和 X-Agent-Request。
+前端先将最长边缩至 1600 像素，压缩成 JPEG。服务端验证上传不超过 2MB、最多 400 万像素、单帧图片。
+返回 id/url/expires_in，发送消息时在 JSON 中附 image_id。图片仅属于本聊天，正文历史保存内部图片链接。
+`GET /agent-api/conversations/{id}/images/{image_id}` 重新检查会话归属，失效返回 410。
+
+图片写入 .local/images 磁盘目录，索引为 images.sqlite3。一小时后清理，删除或清空聊天时清理对应图片。
+每会话最多 10 张、全局最多 100 张。上传、识别、生图共享单并发闸门，忙时立即提示重试。
+生成图片允许最多 8MB，接收供应商 Base64 JSON 最多 12MB；服务器临时内存使用仍需实测。
+Pillow 验证图片，识别通过独立 MiniMax 多模态请求完成，Base64 不写入会话和 checkpoint。
+生成通过 image-01，主模型调用 generate_image 后用受鉴权链接在聊天中展示。每轮生图工具最多一次。
+SSE 新增 image_status，action 为 analyze_image 或 generate_image，用于显示真实执行状态。
+前端预览支持放大，过期后提示重新上传，图片不自动成为长期知识或公开博客配图。
+
+Nginx 的 Agent location 需设置 client_max_body_size 3m。旧的 1MB 默认值可能拒绝合法上传。
+
 ## 联网搜索
 
 默认启用 MiniMax 内置 web_search，`WEB_SEARCH_ENABLED=false` 可关闭，修改后重启服务。

@@ -12,6 +12,8 @@ from evan_agent.blog_author import publish_blog, wants_publication, SEPARATOR
 
 class BlogAuthorTests(unittest.TestCase):
     def test_intent(self):
+        self.assertTrue(wants_publication('帮我发布一篇博客 用于解释工作流是什么，在agent中的作用，以及如何实现，实现原理等知识'))
+        self.assertTrue(wants_publication('发布博客：工作流是什么？'))
         self.assertTrue(wants_publication('帮我写一篇 RAG 文档并发布到我的博客'))
         self.assertFalse(wants_publication('写一篇 RAG 文档'))
         self.assertFalse(wants_publication('发布博客：先不要发布这篇文章'))

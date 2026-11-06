@@ -150,8 +150,6 @@ activemq-data/
 *.sage.py
 
 # Environments
-!.env.example
-.envrc
 .venv
 venv/
 env.bak/
@@ -224,10 +222,41 @@ __marimo__/
 # Private local credentials, conversations, checkpoints and logs
 .local/
 
-# Local embedding configuration and optional model downloads
+# ── 本机凭据：绝不提交 ────────────────────────────────────────
+# 点文件形式：.env / .env.local / .env.production ...
 .env
 .env.*
+# 带前缀形式：deploy/agent.env / prod.env ...
+*.env
+# 模板文件必须保留（.env.example、agent.env.example ...）
 !.env.example
+!*.env.example
+# direnv
+.envrc
+
+# ── 本机运行数据：绝不提交 ────────────────────────────────────
+# 认证库、资料库、聊天与检查点、向量缓存、图片、审计日志
+.local/
+# 开发工作流的本机状态：检查报告、基线快照、上下文索引
+.workflow/
+
+# ── 任何位置的数据库文件 ──────────────────────────────────────
+# 覆盖 SQLite 的 -wal / -shm / -journal 附属文件
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-*
+*.sqlite3-*
+*.db-*
+
+# ── 私钥与证书 ────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# 本地模型下载
 .ollama/
 
 # 本机博客文章、发布工具与配图，通过博客接口单独发布。
