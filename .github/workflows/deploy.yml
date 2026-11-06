@@ -27,7 +27,7 @@ jobs:
     if: github.event_name == 'push'
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
       SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -51,17 +51,17 @@ jobs:
         timeout-minutes: 20
         run: |
           docker build --platform linux/amd64 -t "evan-agent:$GITHUB_SHA" .
-          docker save "evan-agent:$GITHUB_SHA" | gzip -1 > agent.tar.gz
+          docker save "evan-agent:$GITHUB_SHA" | gzip -6 > agent.tar.gz
           ls -lh agent.tar.gz
       - name: Upload compressed release
         id: upload
-        timeout-minutes: 15
+        timeout-minutes: 32
         run: |
           head=$(timeout 30s git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)
           if [ "$head" != "$GITHUB_SHA" ]; then echo 'Newer commit exists; skipping stale deployment.'; exit 0; fi
           remote="/tmp/evan-agent-ci-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           ssh -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes "root@$HOST" "mkdir -m 700 '$remote'"
-          timeout 840s scp -v -i ~/.ssh/deploy -o BatchMode=yes -o StrictHostKeyChecking=yes agent.tar.gz deploy/compose.yaml deploy/ci-deploy.sh "root@$HOST:$remote/"
+          bash deploy/ci-upload.sh "$remote" agent.tar.gz deploy/compose.yaml deploy/ci-deploy.sh
           echo 'ready=true' >> "$GITHUB_OUTPUT"
       - name: Deploy and verify
         if: steps.upload.outputs.ready == 'true'

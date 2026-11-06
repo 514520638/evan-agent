@@ -13,3 +13,5 @@
 完整上线与回滚步骤见 [DEPLOYMENT.md](../docs/DEPLOYMENT.md)。
 CI 的主机校验、超时、三仓库 Secrets 与启用步骤见 [AUTO_DEPLOY.md](../docs/AUTO_DEPLOY.md)。
 CI 输入来自 .github/workflows/deploy.yml（Agent 验证、镜像构建与传输流程）。
+
+ci-upload.sh：显示上传进度、检测传输停滞、最多三次断点续传；上传成功后才执行部署。依赖 runner 与服务器的 rsync。

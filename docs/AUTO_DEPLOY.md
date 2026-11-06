@@ -44,7 +44,7 @@ Java 容器继续使用现有环境变量、网络和配置，不向 GitHub 添�
 工作流 .github/workflows/deploy.yml：Python 3.12 → uv 0.9.25 → 锁定依赖 → unittest →
 SSH 配置与连接预检 → amd64 Docker 镜像（标签为完整 commit SHA）→ gzip 压缩 → SSH 上传 → deploy/ci-deploy.sh。
 镜像在 GitHub runner 构建，服务器只加载压缩镜像，不在 2GB 服务器编译或安装本地 Embedding 模型。
-上传和部署是独立步骤，上传最多 15 分钟，部署最多 20 分钟。SSH 连接有 15 秒超时和保活检测。
+上传和部署是独立步骤，上传最多 32 分钟，部署最多 20 分钟。SSH 连接有 15 秒超时和保活检测。
 部署脚本验证配置、备份 .env 和 Compose、停止 Agent、冷备份数据、切换版本并检查健康。
 失败时恢复旧镜像和 Compose，保存故障数据以供排查，不自动覆盖当前数据为旧快照。
 未来若有不兼容数据库迁移，必须为该迁移设计单独的恢复步骤。
@@ -99,3 +99,5 @@ Java 备份为 /opt/evanlink-backend/backups/ci-SHA-RUN/app.jar。
 
 回滚 Agent：将 /opt/evan-agent/.env 的 AGENT_IMAGE 改为备份 image.env 中的旧标签，再 docker compose up -d。
 回滚前端：将对应备份的 index.html 通过临时文件恢复为网站入口。旧 assets 保留期间可恢复旧版本页面。
+
+上传使用 rsync --append-verify，日志显示字节进度。60 秒无传输活动会失败重试，每次最多 10 分钟，共三次；重试保留部分文件。总上传步骤限制 32 分钟。当前服务器已安装 rsync。传输速度仍取决于 GitHub runner 到服务器的网络，续传不保证提高带宽。
