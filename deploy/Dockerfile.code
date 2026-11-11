@@ -1,0 +1,9 @@
+# 复用经过依赖校验的本地环境，构建期间不访问网络。
+ARG RUNTIME_IMAGE
+FROM ${RUNTIME_IMAGE}
+USER root
+RUN rm -rf /app/src /app/evals
+COPY src /app/src
+COPY evals /app/evals
+COPY README.md /app/README.md
+USER 10001:10001

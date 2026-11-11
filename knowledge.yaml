@@ -1,0 +1,24 @@
+name: evan-agent
+type: service
+pos: 个人数字分身与本人知识管理服务
+tech: [Python, FastAPI, LangChain, LangGraph, SQLite]
+inputs:
+  - name: MiniMax
+    pos: 回答生成与服务端联网搜索供应商
+  - name: SiliconFlow
+    pos: BAAI/bge-m3 向量计算供应商
+outputs:
+  - path: /agent-api
+    consumer: evanlink-cn
+    pos: 博客聊天、身份、审批与知识管理 HTTP 接口
+datastores:
+  - .local/auth.sqlite3
+  - .local/knowledge.sqlite3
+  - .local/conversations.sqlite3
+  - .local/conversations.checkpoints.sqlite3
+  - .local/knowledge.vectors.sqlite3
+status: deployed_user_confirmed_health_and_entry
+runtime_check:
+  evidence: 用户报告容器 healthy、域名 health 正常、聊天入口生效
+  pending: [线上完整业务验收, 长时间资源监测, 备份恢复演练]
+documentation: docs/PROJECT_OVERVIEW.md
