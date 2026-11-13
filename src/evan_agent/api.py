@@ -19,6 +19,8 @@ from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from evan_agent.blog_identity import BlogIdentity
+from evan_agent.guest_questions import GuestQuestions
 from evan_agent.auth import AuthContext, AuthenticationError, require_owner
 from evan_agent.http_auth import WebSessions, RequestLimits
 from evan_agent.service import AgentService
@@ -77,10 +79,13 @@ def create_app(service=None):
     concurrent_requests = int(os.getenv('AGENT_MAX_CONCURRENT_REQUESTS', '2'))
     if not 1 <= concurrent_requests <= 16:
         raise ValueError('AGENT_MAX_CONCURRENT_REQUESTS 须为 1 到 16 的整数。')
+    legacy_web_login = os.getenv('AGENT_ALLOW_LEGACY_WEB_LOGIN', 'false').lower() == 'true'
     managed_service = service is None
     service = service if service is not None else AgentService()
     sessions = WebSessions(service.sessions)
     limits = RequestLimits()
+    blog_identity = BlogIdentity()
+    questions = GuestQuestions(service.knowledge.path.parent / 'guest_questions.sqlite3')
     capacity = BoundedSemaphore(concurrent_requests)
     origins = [v.strip() for v in os.getenv('AGENT_ALLOWED_ORIGINS',
         'http://127.0.0.1:8081,http://localhost:8081,http://127.0.0.1:8001,http://localhost:8001').split(',') if v.strip()]
@@ -135,8 +140,15 @@ def create_app(service=None):
         return JSONResponse({'detail': str(error)}, status_code=400)
 
     def identity(request):
+        cookie = request.cookies.get(BLOG_COOKIE)
+        if cookie:
+            return blog_identity.resolve(cookie)
         try:
-            return sessions.require(request.cookies.get(COOKIE))
+            user = sessions.require(request.cookies.get(COOKIE))
+            if user.session_id.startswith('blog:') or (user.is_owner and not legacy_web_login):
+                sessions.revoke(request.cookies.get(COOKIE))
+                raise PermissionError('博客登录已退出，请重新登录。')
+            return user
         except PermissionError as error:
             raise HTTPException(401, str(error)) from None
 
@@ -183,6 +195,13 @@ def create_app(service=None):
                             samesite='lax', path=PREFIX)
         return {'role': user.role, 'expires_in': age}
 
+    @app.get(PREFIX + '/guest-questions')
+    def guest_questions(request: Request, offset: int = 0, limit: int = 30):
+        require_owner(identity(request))
+        if not 1 <= limit <= 100 or offset < 0:
+            raise HTTPException(400, '分页参数无效。')
+        return questions.list(offset, limit)
+
     @app.get(PREFIX + '/health')
     def health():
         return {'status': 'ok'}
@@ -191,10 +210,20 @@ def create_app(service=None):
     def guest(request: Request, response: Response):
         throttle(request, 'guest', 20)
         sessions.revoke(request.cookies.get(COOKIE))
-        return issue(response, AuthContext.guest())
+        user = AuthContext.guest()
+        if request.cookies.get(BLOG_COOKIE):
+            try:
+                user = identity(request)
+            except HTTPException as error:
+                if error.status_code != 401:
+                    raise
+                response.delete_cookie(BLOG_COOKIE, path='/', secure=secure, httponly=True, samesite='lax')
+        return issue(response, user)
 
     @app.post(PREFIX + '/auth/login')
     def login(body: LoginBody, request: Request, response: Response):
+        if not legacy_web_login:
+            raise HTTPException(400, '请使用博客管理员账号登录，Agent 已启用统一登录。')
         throttle(request, 'login', 10)
         try:
             user = service.auth.login(body.password.get_secret_value())
@@ -204,12 +233,22 @@ def create_app(service=None):
         return issue(response, user)
 
     @app.get(PREFIX + '/auth/me')
-    def me(request: Request):
+    def me(request: Request, response: Response):
         user = identity(request)
+        if request.cookies.get(BLOG_COOKIE):
+            try:
+                current = sessions.require(request.cookies.get(COOKIE))
+            except PermissionError:
+                current = None
+            if current is None or current.session_id != user.session_id:
+                sessions.revoke(request.cookies.get(COOKIE))
+                issue(response, user)
         return {'role': user.role, 'user_id': user.user_id}
 
     @app.post(PREFIX + '/auth/logout')
     def logout(request: Request, response: Response):
+        blog_identity.logout(request.cookies.get(BLOG_COOKIE))
+        response.delete_cookie(BLOG_COOKIE, path='/', secure=secure, httponly=True, samesite='lax')
         sessions.revoke(request.cookies.get(COOKIE))
         response.delete_cookie(COOKIE, path=PREFIX, secure=secure, httponly=True, samesite='lax')
         return {'status': 'logged_out'}
@@ -263,11 +302,21 @@ def create_app(service=None):
             if not capacity.acquire(blocking=False):
                 yield encode({'type': 'error', 'code': 'busy', 'message': '当前请求较多，请稍后再试。'})
                 return
+            if not user.is_owner and kwargs.get('prompt'):
+                try:
+                    await anyio.to_thread.run_sync(questions.add, kwargs['prompt'].split('\n\n![上传的图片]')[0])
+                except Exception:
+                    capacity.release()
+                    yield encode({'type': 'error', 'code': 'storage', 'message': '消息保存暂不可用，请稍后重试。'})
+                    return
             iterator = service.sessions.events(agent, user, conversation_id, **kwargs)
             advancing = None
             sentinel = object()
             def advance():
-                sessions.require(token)
+                if admin_cookie:
+                    blog_identity.check_stream(admin_cookie, user)
+                else:
+                    sessions.require(token)
                 scope = blog_session.set(admin_cookie)
                 try:
                     return next(iterator, sentinel)

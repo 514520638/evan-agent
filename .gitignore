@@ -260,5 +260,5 @@ __marimo__/
 .ollama/
 
 # 本机博客文章、发布工具与配图，通过博客接口单独发布。
-/docs/blog-v1/
+/docs/blog-v*/
 /docs/figures/

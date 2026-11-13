@@ -44,7 +44,7 @@ class ApiTests(unittest.TestCase):
                 checkpointer=sessions.checkpointer,
                 middleware=build_middleware(model, writer=AuditWriter(root / 'audit'), lifecycle_logs=False))
         self.service = AgentService(auth, knowledge, SessionStore(), factory)
-        with patch('evan_agent.api.load_dotenv'), patch.dict('os.environ', {'AGENT_COOKIE_SECURE': 'false'}):
+        with patch('evan_agent.api.load_dotenv'), patch.dict('os.environ', {'AGENT_COOKIE_SECURE': 'false', 'AGENT_ALLOW_LEGACY_WEB_LOGIN': 'true'}):
             self.app = create_app(self.service)
         self.client = TestClient(self.app)
         self.addCleanup(self.client.close)
@@ -120,6 +120,19 @@ class ApiTests(unittest.TestCase):
         self.client.post(BASE+'/auth/guest', headers=HEADERS)
         self.assertEqual(self.client.get(url).status_code, 403)
 
+    def test_guest_message_is_recorded_with_time_but_owner_message_is_not(self):
+        from evan_agent.guest_questions import GuestQuestions
+        self.client.post(BASE+'/auth/guest', headers=HEADERS)
+        chat = self.chat()
+        self.client.post(f'{BASE}/conversations/{chat}/messages', headers=HEADERS, json={'message': '访客询问项目经历'})
+        store = GuestQuestions(self.service.knowledge.path.parent / 'guest_questions.sqlite3')
+        self.assertEqual(store.list()['items'][0]['question'], '访客询问项目经历')
+        self.assertIn('created_at', store.list()['items'][0])
+        self.login()
+        own_chat = self.chat()
+        self.client.post(f'{BASE}/conversations/{own_chat}/messages', headers=HEADERS, json={'message': '主人自己的问题'})
+        self.assertEqual(len(store.list()['items']), 1)
+
     def test_blog_owner_session_reaches_only_java_publish_request(self):
         """验证 Cookie 穿过真实 SSE 和工具执行线程，不进入响应和聊天历史。"""
         import httpx
@@ -127,6 +140,8 @@ class ApiTests(unittest.TestCase):
         from evan_agent.blog_author import BLOG_COOKIE, publish_blog
         from evan_agent.persona import PersonaMiddleware
         self.login()
+        bridge = patch('evan_agent.blog_identity.BlogIdentity.resolve', return_value=self.service.auth.login('test-password-only'))
+        bridge.start(); self.addCleanup(bridge.stop)
         self.client.cookies.set(BLOG_COOKIE, 'sample-admin-session')
         chat = self.chat()
         args = dict(title='标题', title_en='Title', excerpt='摘要', excerpt_en='About',

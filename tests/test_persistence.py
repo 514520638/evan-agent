@@ -43,7 +43,7 @@ class PersistenceTests(unittest.TestCase):
             return create_agent(model=model,tools=build_knowledge_tools(knowledge),context_schema=AuthContext,
                 checkpointer=sessions.checkpointer,middleware=build_middleware(model,writer=AuditWriter(self.root/'audit'),lifecycle_logs=False))
         service=AgentService(self.auth,KnowledgeStore(self.root/'knowledge.sqlite3'),self.store,factory)
-        with patch('evan_agent.api.load_dotenv'),patch.dict('os.environ',{'AGENT_COOKIE_SECURE':'false'}):
+        with patch('evan_agent.api.load_dotenv'),patch.dict('os.environ',{'AGENT_COOKIE_SECURE':'false','AGENT_ALLOW_LEGACY_WEB_LOGIN':'true'}):
             app=create_app(service)
         self.client=TestClient(app)
         if cookies: self.client.cookies.update(cookies)

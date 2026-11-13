@@ -61,7 +61,7 @@ class BlogFlowTests(unittest.TestCase):
                 writer=AuditWriter(self.root/'audit'), lifecycle_logs=False))
         self.service = AgentService(auth, KnowledgeStore(self.root/'knowledge.sqlite3'), SessionStore(), factory)
         with patch('evan_agent.api.load_dotenv'), patch.dict('os.environ', {
-            'AGENT_ALLOWED_ORIGINS': 'https://evanlink.cn', 'AGENT_COOKIE_SECURE': 'true',
+            'AGENT_ALLOWED_ORIGINS': 'https://evanlink.cn', 'AGENT_COOKIE_SECURE': 'true', 'AGENT_ALLOW_LEGACY_WEB_LOGIN': 'true',
         }):
             self.app = create_app(self.service)
         self.owner = TestClient(self.app, base_url='https://evanlink.cn')

@@ -7,6 +7,7 @@ from threading import Event, Thread
 
 from evan_agent.retrieval import Retriever
 from evan_agent.images import ImageStore
+from evan_agent.guest_questions import GuestQuestions
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,8 @@ class Maintenance:
 
     def sweep(self):
         # 独立捕获错误，日志删除失败不能阻止会话到期清理。
-        tasks = [('sessions', self.sessions.cleanup_expired),
+        tasks = [('questions', lambda: GuestQuestions(self.knowledge.path.parent / 'guest_questions.sqlite3').cleanup()),
+                 ('sessions', self.sessions.cleanup_expired),
                  ('images', lambda: ImageStore(self.knowledge.path.parent, self.sessions.conversations).cleanup()),
                  ('vectors', lambda: Retriever(self.knowledge)),
                  ('audit', lambda: prune_audit(self.audit_directory))]

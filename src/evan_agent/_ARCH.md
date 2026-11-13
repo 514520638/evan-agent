@@ -20,3 +20,10 @@
 
 依赖：MiniMax（回答与搜索）、硅基流动（向量计算）、SQLite（本地持久化）。
 跨模块技术设计见 [AGENT_DESIGN.md](../../docs/AGENT_DESIGN.md)，数据结构见 [DATABASE_DESIGN.md](../../docs/DATABASE_DESIGN.md)。
+
+## 博客统一身份与访客提问
+
+- blog_identity.py：固定 Java 地址校验 HttpOnly 博客 Cookie，生成 AuthContext；不复制管理员密码，流中每 15 秒复验及检查撤销标记。
+- guest_questions.py：独立 SQLite 保存访客问题与 UTC 时间，保留 183 天、最多 20,000 条，不随临时聊天过期删除。
+- api.py：统一登录桥接、双端退出、管理员问题列表；实际接受处理的访客消息写入日志，主人消息不记录。
+- maintenance.py：定时轮换访客问题。旧 HTTP 独立密码登录仅在显式兼容开关开启时可用，CLI 认证仍独立。
