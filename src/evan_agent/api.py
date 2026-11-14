@@ -96,9 +96,11 @@ def create_app(service=None):
     async def lifespan(app):
         maintenance = Maintenance(sessions, service.knowledge, DEFAULT_AUDIT_DIR)
         maintenance.start()
+        questions.start()
         try:
             yield
         finally:
+            await anyio.to_thread.run_sync(questions.close)
             await anyio.to_thread.run_sync(maintenance.close)
             if managed_service:
                 service.sessions.close()
@@ -304,7 +306,7 @@ def create_app(service=None):
                 return
             if not user.is_owner and kwargs.get('prompt'):
                 try:
-                    await anyio.to_thread.run_sync(questions.add, kwargs['prompt'].split('\n\n![上传的图片]')[0])
+                    await anyio.to_thread.run_sync(questions.add, kwargs['prompt'].split('\n\n![上传的图片]')[0], request.client.host if request.client else None)
                 except Exception:
                     capacity.release()
                     yield encode({'type': 'error', 'code': 'storage', 'message': '消息保存暂不可用，请稍后重试。'})

@@ -12,7 +12,7 @@ HTTP 独立密码登录默认禁用；AGENT_ALLOW_LEGACY_WEB_LOGIN=true 仅供�
 
 ## 访客提问
 
-文件 .local/guest_questions.sqlite3 随现有 shared/data 持久化挂载备份。保存问题原文和 UTC 时间，不保存 Cookie/IP，不加入公开 RAG。
+文件 .local/guest_questions.sqlite3 随现有 shared/data 持久化挂载备份。保存问题原文和 UTC 时间，不保存 Cookie，不加入公开 RAG。新增地区功能仅临时保存待查询公网 IP，查询完成后清除。
 仅记录已被服务接受处理的访客请求；超出并发/限流的请求、主人问题不记录。模型失败的访客问题仍属于已提出的问题，会保留。
 记录保留 183 天并限制 20,000 条，后台每分钟清理。临时聊天一小时过期不会删除独立问题记录。
 GET /agent-api/guest-questions?offset=0&limit=30 要求主人权限；首页管理员菜单和 Agent 会话管理面板提供查看入口。
@@ -28,3 +28,12 @@ GET /agent-api/guest-questions?offset=0&limit=30 要求主人权限；首页管�
 
 移除未被工作流引用的 deploy/ci-pull.sh，保留固定本地运行环境的 ci-build-code.sh。
 博客文章包 docs/blog-v*/ 被忽略，文件保留不删除。终端认证、审批、恢复和持久化兼容代码仍有用途，不按“看起来复杂”删除。
+
+## 地区估算
+
+新增 region、geo_status、client_ip 列，旧 SQLite 自动兼容迁移，历史问题地区为未知。前端显示时间、问题和估算地区，只有管理员可读。
+后台单线程查询固定 HTTPS 服务 https://ipwho.is，仅发送 IP，字段限定国家、省、市。不查询/保存街道、门牌号或经纬度，不将问题内容发送给定位服务。
+查询成功/失败后清除表内暂存 IP；未处理 IP 最长保留一天。内存缓存最多 1024 个 IP，成功 24 小时、失败 60 秒；每天最多 900 次外部查询，失败或超额显示未知。GUEST_GEO_ENABLED=false 可关闭定位。
+来源使用 request.client.host：生产必须保持 Nginx 覆盖 X-Forwarded-For=$remote_addr，Agent 只暴露回环端口；不得直接向公网开放信任任意代理头的 Uvicorn。接 CDN 或新代理时需重新配置可信代理链。
+地区查询不处在聊天等待链路，首次显示查询中，管理员面板自动刷新待定位条目。
+隐私提示已更新；地区仅为 IP 归属估算，VPN、代理、移动网络会影响结果。定位服务可用性及配额以供应商为准： https://ipwhois.io/documentation 。
